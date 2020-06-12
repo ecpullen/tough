@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::editor::keys::get_root_keys;
+use crate::editor::keys::get_targets_keys;
 use crate::error::{self, Result};
 use crate::key_source::KeySource;
 use crate::schema::{
@@ -12,6 +13,7 @@ use ring::digest::{digest, SHA256, SHA256_OUTPUT_LEN};
 use ring::rand::SecureRandom;
 use serde::Serialize;
 use snafu::{ensure, OptionExt, ResultExt};
+use std::collections::HashMap;
 use std::os::unix::fs::symlink;
 use std::path::Path;
 use walkdir::WalkDir;
@@ -23,7 +25,7 @@ use walkdir::WalkDir;
 ///
 /// Convenience methods are provided on `SignedRepository` to ensure that
 /// each role's buffer is written correctly.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SignedRole<T> {
     pub(crate) signed: Signed<T>,
     pub(crate) buffer: Vec<u8>,
@@ -101,6 +103,96 @@ where
         Ok(signed_role)
     }
 
+    pub fn new_targets(
+        role: &Targets,
+        keys: &[Box<dyn KeySource>],
+        rng: &dyn SecureRandom,
+    ) -> Result<HashMap<String, SignedRole<Targets>>> {
+        let mut signed_roles = HashMap::new();
+        if let Some(delegations) = &role.delegations {
+            if delegations.roles.is_empty() {
+                return Ok(signed_roles);
+            }
+            let root_keys = get_targets_keys(&delegations, keys)?;
+            for role in &delegations.roles {
+                let name = role.name.clone();
+                let role_keys = role.keys();
+                // Ensure the keys we have available to us will allow us
+                // to sign this role. The role's key ids must match up with one of
+                // the keys provided.
+
+                // Create the `Signed` struct for this role. This struct will be
+                // mutated later to contain the signatures.
+
+                //only sign targets that we have keys for without throwing an error
+                //delegations allow a key to sign some roles without having to sign them all
+                if let Some(targets) = &role.targets {
+                    let role = if let Some((signing_key_id, signing_key)) = root_keys
+                        .iter()
+                        .find(|(keyid, _signing_key)| role_keys.keyids.contains(&keyid))
+                    {
+                        let mut role = Signed {
+                            signed: targets.clone().signed,
+                            signatures: Vec::new(),
+                        };
+                        let mut data = Vec::new();
+                        let mut ser = serde_json::Serializer::with_formatter(
+                            &mut data,
+                            CanonicalFormatter::new(),
+                        );
+                        role.signed
+                            .serialize(&mut ser)
+                            .context(error::SerializeRole {
+                                role: T::TYPE.to_string(),
+                            })?;
+                        let sig = signing_key.sign(&data, rng)?;
+
+                        // Add the signatures to the `Signed` struct for this role
+                        role.signatures.push(Signature {
+                            keyid: signing_key_id.clone(),
+                            sig: sig.into(),
+                        });
+
+                        role
+                    } else {
+                        delegations
+                            .verify_role(targets, &name)
+                            .context(error::KeyNotFound { role: name.clone() })?;
+                        targets.clone()
+                    };
+
+                    // Serialize the newly signed role, and calculate its length and
+                    // sha256.
+                    let mut buffer =
+                        serde_json::to_vec_pretty(&role).context(error::SerializeSignedRole {
+                            role: T::TYPE.to_string(),
+                        })?;
+                    buffer.push(b'\n');
+                    let length = buffer.len() as u64;
+
+                    let mut sha256 = [0; SHA256_OUTPUT_LEN];
+                    sha256.copy_from_slice(digest(&SHA256, &buffer).as_ref());
+
+                    signed_roles.extend(SignedRole::<Targets>::new_targets(
+                        &role.signed.clone(),
+                        keys,
+                        rng,
+                    )?);
+                    // Create the `SignedRole` containing, the `Signed<role>`, serialized
+                    // buffer, length and sha256.
+                    let signed_role = SignedRole {
+                        signed: role,
+                        buffer,
+                        sha256,
+                        length,
+                    };
+                    signed_roles.insert(name, signed_role);
+                }
+            }
+        }
+        Ok(signed_roles)
+    }
+
     pub fn signed(&self) -> &Signed<T> {
         &self.signed
     }
@@ -148,6 +240,28 @@ where
         let path = outdir.join(filename);
         std::fs::write(&path, &self.buffer).context(error::FileWrite { path })
     }
+
+    /// Write the current delegated role's buffer to the given directory with the
+    /// appropriate file name.
+    pub(crate) fn write_del_role<P>(
+        &self,
+        outdir: P,
+        consistent_snapshot: bool,
+        name: &str,
+    ) -> Result<()>
+    where
+        P: AsRef<Path>,
+    {
+        let outdir = outdir.as_ref();
+        std::fs::create_dir_all(outdir).context(error::DirCreate { path: outdir })?;
+
+        let path = outdir.join(if consistent_snapshot {
+            format!("{}.{}.json", self.signed.signed.version(), name)
+        } else {
+            format!("{}.json", name)
+        });
+        std::fs::write(&path, &self.buffer).context(error::FileWrite { path })
+    }
 }
 
 // =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=
@@ -160,12 +274,13 @@ where
 /// Note: without the target files, the repository cannot be used. It is up
 /// to the user to ensure all the target files referenced by the metadata are
 /// available. There are convenience methods to help with this.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct SignedRepository {
     pub(crate) root: SignedRole<Root>,
     pub(crate) targets: SignedRole<Targets>,
     pub(crate) snapshot: SignedRole<Snapshot>,
     pub(crate) timestamp: SignedRole<Timestamp>,
+    pub(crate) delegations: HashMap<String, SignedRole<Targets>>,
 }
 
 impl SignedRepository {
@@ -179,7 +294,11 @@ impl SignedRepository {
         self.root.write(&outdir, consistent_snapshot)?;
         self.targets.write(&outdir, consistent_snapshot)?;
         self.snapshot.write(&outdir, consistent_snapshot)?;
-        self.timestamp.write(&outdir, consistent_snapshot)
+        self.timestamp.write(&outdir, consistent_snapshot)?;
+        for (key, targets) in &self.delegations {
+            targets.write_del_role(&outdir, consistent_snapshot, &key)?;
+        }
+        Ok(())
     }
 
     /// Crawls a given directory and symlinks any targets found to the given
@@ -204,7 +323,7 @@ impl SignedRepository {
             std::fs::canonicalize(indir).context(error::AbsolutePath { path: indir })?;
         let abs_outdir =
             std::fs::canonicalize(outdir).context(error::AbsolutePath { path: outdir })?;
-        let repo_targets = &self.targets.signed.signed.targets;
+        let repo_targets = &self.targets.signed.signed.targets_map();
 
         // Walk the absolute path of the indir. Using the absolute path here
         // means that `entry.path()` call will return its absolute path.

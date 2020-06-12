@@ -71,7 +71,6 @@ fn test_tuf_reference_impl() {
             .unwrap(),
         "0644"
     );
-
     assert!(repo
         .targets()
         .signed

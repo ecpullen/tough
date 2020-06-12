@@ -790,7 +790,7 @@ fn load_targets<T: Transport>(
         .get("targets.json")
         .context(error::MetaMissing {
             file: "targets.json",
-            role: RoleType::Timestamp,
+            role: RoleType::Targets,
         })?;
     let path = if root.signed.consistent_snapshot {
         format!("{}.targets.json", targets_meta.version)
@@ -891,6 +891,7 @@ fn load_targets<T: Transport>(
         load_delegations(
             transport,
             snapshot,
+            root.signed.consistent_snapshot,
             metadata_base_url,
             max_targets_size,
             delegations,
@@ -905,6 +906,7 @@ fn load_targets<T: Transport>(
 fn load_delegations<T: Transport>(
     transport: &T,
     snapshot: &Signed<Snapshot>,
+    consistent_snapshot: bool,
     metadata_base_url: &Url,
     max_targets_size: u64,
     delegation: &mut Delegations,
@@ -922,19 +924,36 @@ fn load_delegations<T: Transport>(
                 name: delegated_role.name.clone(),
             })?;
 
-        let path = format!("{}.json", &delegated_role.name);
+        let path = if consistent_snapshot {
+            format!("{}.{}.json", &role_meta.version, &delegated_role.name)
+        } else {
+            format!("{}.json", &delegated_role.name)
+        };
         let role_url = metadata_base_url.join(&path).context(error::JoinUrl {
             path: path.clone(),
             url: metadata_base_url.to_owned(),
         })?;
-        let specifier = "max_targets_size parameter";
         //load the role json file
-        let reader = Box::new(fetch_max_size(
-            transport,
-            role_url,
-            max_targets_size,
-            specifier,
-        )?);
+        let (max_targets_size, specifier) = match role_meta.length {
+            Some(length) => (length, "snapshot.json"),
+            None => (max_targets_size, "max_targets_size parameter"),
+        };
+        let reader = if let Some(hashes) = &role_meta.hashes {
+            Box::new(fetch_sha256(
+                transport,
+                role_url,
+                max_targets_size,
+                specifier,
+                &hashes.sha256,
+            )?) as Box<dyn Read>
+        } else {
+            Box::new(fetch_max_size(
+                transport,
+                role_url,
+                max_targets_size,
+                specifier,
+            )?)
+        };
         //since each role is a targets, we load them as such
         let role: Signed<crate::schema::Targets> =
             serde_json::from_reader(reader).context(error::ParseMetadata {
@@ -975,6 +994,7 @@ fn load_delegations<T: Transport>(
                 load_delegations(
                     transport,
                     snapshot,
+                    consistent_snapshot,
                     metadata_base_url,
                     max_targets_size,
                     delegations,

@@ -112,8 +112,12 @@ pub enum Error {
     #[snafu(display("Targets didn't contain delegations field"))]
     NoDelegations {},
 
-    #[snafu(display("Invalid Regex: {}", regex))]
+    #[snafu(display("Invalid regex: {}", regex))]
     BadRegex { regex: String },
+
+    /// No role with name
+    #[snafu(display("Role not found: {}", name))]
+    RoleNotFound { name: String },
 }
 
 /// Wrapper for error types that don't impl [`std::error::Error`].

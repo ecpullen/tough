@@ -5,6 +5,7 @@
 
 #![allow(clippy::default_trait_access)]
 
+use crate::schema;
 use crate::schema::RoleType;
 use chrono::{DateTime, Utc};
 use snafu::{Backtrace, Snafu};
@@ -365,6 +366,12 @@ pub enum Error {
     #[snafu(display("Delegated role not found: {}", name))]
     DelegateNotFound { name: String },
 
+    #[snafu(display("Delegated role not found: {}", name))]
+    DelegateMissing {
+        name: String,
+        source: crate::schema::Error,
+    },
+
     #[snafu(display("Delegation doesn't contain targets field"))]
     NoTargets {},
 
@@ -380,6 +387,29 @@ pub enum Error {
 
     #[snafu(display("Role missing from snapshot meta: {}", name))]
     RoleNotInMeta { name: String },
+
+    #[snafu(display("The key for {} was not included", role))]
+    KeyNotFound {
+        role: String,
+        source: schema::error::Error,
+        backtrace: Backtrace,
+    },
+
+    #[snafu(display("Invalid number"))]
+    InvalidInto {
+        source: std::num::TryFromIntError,
+        backtrace: Backtrace,
+    },
+
+    #[snafu(display("Invalid threshold number"))]
+    InvalidThreshold { backtrace: Backtrace },
+
+    /// The library failed to serialize an object to JSON.
+    #[snafu(display("Failed to serialize to JSON: {}", source))]
+    JsonSerialization {
+        source: schema::error::Error,
+        backtrace: Backtrace,
+    },
 }
 
 // used in `std::io::Read` implementations

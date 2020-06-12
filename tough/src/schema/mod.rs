@@ -2,7 +2,7 @@
 
 mod de;
 pub mod decoded;
-mod error;
+pub mod error;
 mod iter;
 pub mod key;
 mod spki;
@@ -311,7 +311,7 @@ impl Targets {
             expires,
             targets: HashMap::new(),
             _extra: HashMap::new(),
-            delegations: None,
+            delegations: Some(Delegations::new()),
         }
     }
 
@@ -378,6 +378,71 @@ impl Targets {
 
         roles
     }
+
+    ///recursively clears all targets
+    pub fn clear_targets(&mut self) {
+        self.targets = HashMap::new();
+        if let Some(delegations) = &mut self.delegations {
+            for del_role in &mut delegations.roles {
+                if let Some(targets) = &mut del_role.targets {
+                    targets.signed.clear_targets();
+                }
+            }
+        }
+    }
+
+    pub fn targets_by_name(&mut self, name: &str) -> Result<&mut Self> {
+        if let Some(delegations) = &mut self.delegations {
+            for role in &mut delegations.roles {
+                if let Some(targets) = &mut role.targets {
+                    if role.name == name {
+                        return Ok(&mut targets.signed);
+                    } else if let Ok(role) = targets.signed.targets_by_name(name) {
+                        return Ok(role);
+                    }
+                }
+            }
+        }
+        Err(Error::RoleNotFound {
+            name: name.to_string(),
+        })
+    }
+
+    pub fn add_target(&mut self, name: &str, target: Target) {
+        self.targets.insert(name.to_string(), target);
+    }
+
+    ///Returns a vec of all rolenames
+    pub fn get_roles_str(&self) -> Vec<&String> {
+        let mut roles = Vec::new();
+        if let Some(del) = &self.delegations {
+            for role in &del.roles {
+                roles.push(&role.name);
+                if let Some(targets) = &role.targets {
+                    roles.append(&mut targets.signed.get_roles_str())
+                }
+            }
+        }
+
+        roles
+    }
+
+    pub fn get_del_role_by_name(&mut self, name: &str) -> Result<&mut DelegatedRole> {
+        if let Some(delegations) = &mut self.delegations {
+            for role in &mut delegations.roles {
+                if role.name == name {
+                    return Ok(role);
+                } else if let Some(targets) = &mut role.targets {
+                    if let Ok(role) = targets.signed.get_del_role_by_name(name) {
+                        return Ok(role);
+                    }
+                }
+            }
+        }
+        Err(Error::RoleNotFound {
+            name: name.to_string(),
+        })
+    }
 }
 
 impl Role for Targets {
@@ -393,7 +458,7 @@ impl Role for Targets {
 }
 
 //Implementation for delegated targets
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Default)]
 pub struct Delegations {
     #[serde(deserialize_with = "de::deserialize_keys")]
     pub keys: HashMap<Decoded<Hex>, Key>,
@@ -407,8 +472,8 @@ pub struct DelegatedRole {
     pub keyids: Vec<Decoded<Hex>>,
     pub threshold: NonZeroU64,
     #[serde(flatten)]
-    paths: PathSet,
-    terminating: bool,
+    pub paths: PathSet,
+    pub terminating: bool,
     #[serde(skip)]
     pub targets: Option<Signed<Targets>>,
 }
@@ -434,7 +499,6 @@ impl PathSet {
                     }
                 }
             }
-
             Self::PathHashPrefixes(path_prefixes) => {
                 for path in path_prefixes {
                     if Self::matched_prefix(path, target) {
@@ -442,7 +506,7 @@ impl PathSet {
                     }
                 }
             }
-        }
+        };
         false
     }
 
@@ -469,6 +533,13 @@ impl PathSet {
 }
 
 impl Delegations {
+    pub fn new() -> Self {
+        Delegations {
+            keys: HashMap::new(),
+            roles: Vec::new(),
+        }
+    }
+
     ///Determines if target passes pathset specific matching
     pub fn target_is_delegated(&self, target: &str) -> bool {
         for role in &self.roles {
@@ -497,18 +568,20 @@ impl Delegations {
     }
 
     ///Returns given role if its a child of struct
-    pub fn role(&self, role_name: &str) -> Option<&DelegatedRole> {
+    pub fn role(&self, role_name: &str) -> Result<&DelegatedRole> {
         for role in &self.roles {
             if role.name == role_name {
-                return Some(&role);
+                return Ok(&role);
             }
         }
-        None
+        Err(error::Error::RoleNotFound {
+            name: role_name.to_string(),
+        })
     }
 
     ///verifies that roles matches contain valid keys
     pub fn verify_role(&self, role: &Signed<Targets>, name: &str) -> Result<()> {
-        let role_keys = self.role(name).expect("Role not found");
+        let role_keys = self.role(name)?;
         let mut valid = 0;
 
         //serialize the role to verify the key
@@ -529,7 +602,6 @@ impl Delegations {
                 }
             }
         }
-
         ensure!(
             valid >= u64::from(role_keys.threshold),
             error::SignatureThreshold {
@@ -597,6 +669,27 @@ impl Delegations {
             }
         }
         targets
+    }
+
+    /// Given an object/key that impls Sign, return the corresponding
+    /// key ID from Delegation
+    pub fn key_id(&self, key_pair: &dyn Sign) -> Option<Decoded<Hex>> {
+        for (key_id, key) in &self.keys {
+            if key_pair.tuf_key() == *key {
+                return Some(key_id.clone());
+            }
+        }
+        None
+    }
+}
+
+impl DelegatedRole {
+    pub fn keys(&self) -> RoleKeys {
+        RoleKeys {
+            keyids: self.keyids.clone(),
+            threshold: self.threshold,
+            _extra: HashMap::new(),
+        }
     }
 }
 
