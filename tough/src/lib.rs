@@ -32,6 +32,7 @@ pub mod sign;
 mod transport;
 
 #[cfg(feature = "http")]
+use crate::schema::{Delegations, DelegatedRole, Target};
 pub use crate::transport::HttpTransport;
 pub use crate::transport::{FilesystemTransport, Transport};
 
@@ -45,6 +46,7 @@ use std::borrow::Cow;
 use std::io::Read;
 use std::path::Path;
 use url::Url;
+use std::collections::HashMap;
 
 /// Represents whether a Repository should fail to load when metadata is expired (`Safe`) or whether
 /// it should ignore expired metadata (`Unsafe`). Only use `Unsafe` if you are sure you need it.
@@ -289,6 +291,10 @@ impl<'a, T: Transport> Repository<'a, T> {
         &self.timestamp
     }
 
+    pub fn get_targets(&self) -> Vec<&Target>{
+        self.targets.signed.get_targets()
+    }
+
     /// Fetches a target from the repository.
     ///
     /// If the repository metadata is expired or there is an issue making the request, `Err` is
@@ -329,13 +335,20 @@ impl<'a, T: Transport> Repository<'a, T> {
         //   found earlier in step 4. In either case, the client MUST write the file to
         //   non-volatile storage as FILENAME.EXT.
         Ok(
-            if let Some(target) = self.targets.signed.targets.get(name) {
+            if let Ok(target) = self.targets.signed.find_target(name) {
                 let (sha256, file) = self.target_digest_and_filename(target, name);
                 Some(self.fetch_target(target, &sha256, file.as_str())?)
             } else {
                 None
             },
         )
+    }
+
+    pub fn get_role(&self, name: &str) -> Result<&DelegatedRole>{
+        match self.targets.signed.get_del_role(name) {
+            Ok(del_role) => Ok(del_role),
+            _ => Err(error::Error::TargetNotFound{target_url:name.to_string()})
+        }
     }
 }
 
@@ -808,7 +821,7 @@ fn load_targets<T: Transport>(
             specifier,
         )?)
     };
-    let targets: Signed<crate::schema::Targets> =
+    let mut targets: Signed<crate::schema::Targets> =
         serde_json::from_reader(reader).context(error::ParseMetadata {
             role: RoleType::Targets,
         })?;
@@ -874,8 +887,82 @@ fn load_targets<T: Transport>(
 
     // Now that everything seems okay, write the targets file to the datastore.
     datastore.create("targets.json", &targets)?;
+    // print!("\"{}role1.json\"",metadata_base_url);
+    load_delegations(transport, snapshot, metadata_base_url, max_targets_size, &mut targets.signed.delegations.as_mut().unwrap())?;
 
     Ok(targets)
+}
+
+fn load_delegations <T: Transport>(
+    transport: &T,
+    snapshot: &Signed<Snapshot>,
+    metadata_base_url: &Url,
+    max_targets_size: u64,
+    delegation: &mut Delegations,
+) -> Result<()>{
+    let mut delegated_roles:HashMap<String, Option<Signed<crate::schema::Targets>>> = HashMap::new();
+    for del_role in & delegation.roles {
+        print!("{}",del_role.name);
+        let role_meta = snapshot.signed.meta.get(&format!("{}.json",&del_role.name)).unwrap();
+        print!("\"{}{}.json\"",metadata_base_url, &del_role.name);
+        // let read = File::open(format!("{}{}.json",metadata_base_url, &del_role.name)).unwrap();
+
+
+
+
+        let path = format!("{}.json", &del_role.name);
+        let role_url = metadata_base_url.join(&path).context(error::JoinUrl {
+            path,
+            url: metadata_base_url.to_owned(),
+        })?;
+        let specifier = "max_targets_size parameter";
+        
+        let reader = Box::new(fetch_max_size(
+                transport,
+                role_url,
+                max_targets_size,
+                specifier,
+            )?);
+        let role: Signed<crate::schema::Targets> =
+            serde_json::from_reader(reader).context(error::ParseMetadata {
+                role: RoleType::Targets,
+            })?;
+
+
+
+
+
+
+
+
+        // let role: Signed<crate::schema::Targets> =
+        // serde_json::from_reader(read).context(error::ParseMetadata {
+        //     role: RoleType::Targets,
+        // })?;
+        delegation
+        .verify_role(&role, &del_role.name)
+        .context(error::VerifyMetadata {
+            role: RoleType::Targets,
+        })?;
+        ensure!(
+            role.signed.version == role_meta.version,
+            error::VersionMismatch {
+                role: RoleType::Targets,
+                fetched: role.signed.version,
+                expected: role_meta.version
+            }
+        );
+        {
+            role.signed.delegations.as_ref().unwrap().verify_paths().expect("Invalid path found");
+        }
+        delegated_roles.insert(del_role.name.clone(),Some(role));
+    }
+    for del_role in &mut delegation.roles{
+        del_role.targets = delegated_roles.remove(&del_role.name).unwrap();
+        print!("About to load: {}", del_role.name);
+        load_delegations(transport, snapshot, metadata_base_url, max_targets_size, &mut del_role.targets.as_mut().unwrap().signed.delegations.as_mut().unwrap())?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

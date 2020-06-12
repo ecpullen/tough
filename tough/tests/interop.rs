@@ -71,6 +71,10 @@ fn test_tuf_reference_impl() {
             .unwrap(),
         "0644"
     );
+    println!("{:?}", repo.targets().signed.delegations);
+    assert!(repo.targets().signed.delegations.as_ref().unwrap().check_target(&"file3.txt".to_string()));
+    println!("{}", repo.targets().signed.delegations.as_ref().unwrap().check_target(&"file1.txt".to_string()));
+    println!("{:?}", repo.get_targets());
 }
 
 #[cfg(feature = "http")]

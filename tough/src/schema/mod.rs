@@ -16,16 +16,19 @@ use crate::schema::key::Key;
 use crate::sign::Sign;
 use chrono::{DateTime, Utc};
 use olpc_cjson::CanonicalFormatter;
-use ring::digest::{Context, SHA256};
+use ring::digest::{Context, digest, SHA256};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_plain::{forward_display_to_serde, forward_from_str_to_serde};
-use snafu::ResultExt;
+use snafu::{ResultExt, ensure};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::num::NonZeroU64;
 use std::path::Path;
+use url::Url;
+use regex::Regex;
+pub use crate::transport::{FilesystemTransport, Transport};
 
 /// A role type.
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Hash)]
@@ -233,7 +236,7 @@ pub struct Targets {
     pub version: NonZeroU64,
     pub expires: DateTime<Utc>,
     pub targets: HashMap<String, Target>,
-
+    pub delegations: Option<Delegations>,
     /// Extra arguments found during deserialization.
     ///
     /// We must store these to correctly verify signatures for this object.
@@ -308,7 +311,38 @@ impl Targets {
             expires,
             targets: HashMap::new(),
             _extra: HashMap::new(),
+            delegations: None,
         }
+    }
+
+    pub fn find_target(&self, target_url: &str) -> Result<&Target>{
+        match self.targets.get(target_url) {
+            Some(target) => return Ok(target),
+            None => {
+                match &self.delegations {
+                    None => return Err(Error::TargetNotFound{target_url:target_url.clone().to_string()}),
+                    Some(delegations) => return delegations.find_target(target_url)
+                }
+            }
+        }
+    }
+
+    pub fn get_del_role(&self, name:&str) -> Result<&DelegatedRole>{
+        self.delegations.as_ref().unwrap().get_del_role(name)
+    }
+
+    pub fn get_targets(&self) -> Vec<&Target>{
+        let mut targets = Vec::new();
+        for target in &self.targets {
+            targets.push(target.1);
+        }
+        if let Some(del) = &self.delegations {
+            for t in del.get_targets() {
+                targets.push(t);
+            }
+        }
+
+        targets
     }
 }
 
@@ -321,6 +355,187 @@ impl Role for Targets {
 
     fn version(&self) -> NonZeroU64 {
         self.version
+    }
+}
+
+//Implementation for delegated targets
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct Delegations {
+    #[serde(deserialize_with = "de::deserialize_keys")]
+    pub keys: HashMap<Decoded<Hex>, Key>,
+    pub roles: Vec<DelegatedRole>
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct DelegatedRole{
+    pub name: String,
+    pub keyids: Vec<Decoded<Hex>>,
+    pub threshold: NonZeroU64,
+    #[serde(flatten)]
+    paths: PathSet,
+    terminating: bool,
+    #[serde(skip)]
+    pub targets: Option<Signed<Targets>>
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub enum PathSet{
+
+    #[serde(rename = "paths")]
+    Paths(
+        Vec<String>
+    ),
+
+    #[serde(rename = "path_hash_prefixes")]
+    PathHashPrefixes(
+        Vec<String> 
+    )
+}
+
+impl PathSet{
+    fn matched_target(&self, target: &String) -> bool{
+        match self{
+            Self::Paths(paths) => {
+                for path in paths {
+                    if Self::matched_path(path, target) {
+                        return true
+                    }
+                }
+            }
+
+            Self::PathHashPrefixes(path_prefixes) => {
+                for path in path_prefixes {
+                    if Self::matched_prefix(path, target) {
+                        return true
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    fn matched_prefix(prefix: &String, target: &String) -> bool{
+        let temp_target = target.clone();
+        let hash = digest(&SHA256, temp_target.as_bytes());
+        hash.as_ref().starts_with(prefix.as_bytes())
+    }
+
+    fn matched_path(wildcardpath: &String, target: &String) -> bool{
+        let mut regex_string = wildcardpath.clone();
+        regex_string = regex_string.replace(".", "\\.");
+        regex_string = regex_string.replace("*", "[^/]*");
+        regex_string = regex_string.replace("?", ".");
+        let re = Regex::new(&regex_string).unwrap();
+        re.is_match(&target)
+    }
+}
+
+impl Delegations {
+    ///determines if target passes shell wildcard of path
+    pub fn check_target(&self, target: &String) -> bool{
+        for role in &self.roles {
+            if role.paths.matched_target(target) {
+                return true
+            }
+        }
+        false
+    }
+
+    pub fn verify_paths(&self) -> Result<()>{
+        for sub_role in &self.roles {
+            for path in match &sub_role.paths{
+                PathSet::Paths(paths) => paths,
+                PathSet::PathHashPrefixes(paths) => paths
+            } {
+                if !self.check_target(&path) {
+                    return Err(Error::UnmatchedPath{child:path.to_string()})
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn get_role(&self, role_name: &String) -> Option<&DelegatedRole>{
+        for role in &self.roles {
+            if &role.name == role_name {
+                return Some(&role)
+            }
+        }
+        None
+    }
+
+    pub fn verify_role(&self, role: &Signed<Targets>, name: &String) -> Result<()> {
+        let role_keys = self
+            .get_role(name)
+            .expect("Role not found");
+        let mut valid = 0;
+
+        let mut data = Vec::new();
+        let mut ser = serde_json::Serializer::with_formatter(&mut data, CanonicalFormatter::new());
+        role.signed
+            .serialize(&mut ser)
+            .context(error::JsonSerialization {
+                what: format!("Targets role"),
+            })?;
+
+        for signature in &role.signatures {
+            if role_keys.keyids.contains(&signature.keyid) {
+                if let Some(key) = self.keys.get(&signature.keyid) {
+                    if key.verify(&data, &signature.sig) {
+                        valid += 1;
+                    }
+                }
+            }
+        }
+
+        ensure!(
+            valid >= u64::from(role_keys.threshold),
+            error::SignatureThreshold {
+                role: RoleType::Targets,
+                threshold: role_keys.threshold,
+                valid,
+            }
+        );
+        Ok(())
+    }
+
+    pub fn find_target(&self, target_url: &str) -> Result<&Target>{
+        for del_role in &self.roles {
+            match &del_role.targets{
+                Some(targets) => match &targets.signed.find_target(target_url) {
+                    Ok(target) => return Ok(target),
+                    _ => continue
+                },
+                None => continue
+            }
+            
+        }
+        Err(Error::TargetNotFound{target_url:target_url.to_string()})
+    }
+
+    pub fn get_del_role(&self, name:&str)->Result<&DelegatedRole>{
+        for del_role in &self.roles {
+            if del_role.name == name {
+                return Ok(&del_role)
+            }
+            match del_role.targets.as_ref().unwrap().signed.get_del_role(name) {
+                Ok(del) => return Ok(del),
+                _ => continue
+            }
+        }
+        Err(Error::TargetNotFound{target_url:name.to_string()})
+    }
+
+    pub fn get_targets(&self) -> Vec<&Target> {
+        let mut targets = Vec::<&Target>::new();
+        for role in &self.roles {
+            if let Some(t) = &role.targets {
+                for t in t.signed.get_targets() {
+                    targets.push(t);
+                }
+            }
+        }
+        targets
     }
 }
 
@@ -382,4 +597,27 @@ impl Role for Timestamp {
     fn version(&self) -> NonZeroU64 {
         self.version
     }
+}
+
+
+#[test]
+fn test_matches_ast(){
+    assert!(PathSet::matched_path(&"Metadata/root.json".to_string(), &"Metadata/root.json".to_string()));
+    assert!(PathSet::matched_path(&"Metadata/*.json".to_string(), &"Metadata/root.json".to_string()));
+    assert!(PathSet::matched_path(&"Metadata/root.*".to_string(), &"Metadata/root.json".to_string()));
+    assert!(PathSet::matched_path(&"Metadata/*.*".to_string(), &"Metadata/root.json".to_string()));
+}
+
+#[test]
+fn test_matches_qtm(){
+    assert!(PathSet::matched_path(&"Metadata/root.json".to_string(), &"Metadata/root.json".to_string()));
+    assert!(PathSet::matched_path(&"Metadata/root-?.json".to_string(), &"Metadata/root-2.json".to_string()));
+    assert!(!PathSet::matched_path(&"Metadata/root-?.json".to_string(), &"Metadata/root-12.json".to_string()));
+}
+
+#[test]
+fn test_matches_both(){
+    assert!(PathSet::matched_path(&"Metadata/root.json".to_string(), &"Metadata/root.json".to_string()));
+    assert!(PathSet::matched_path(&"Metadata/root-?.*".to_string(), &"Metadata/root-2.json".to_string()));
+    assert!(PathSet::matched_path(&"*/root-?.json".to_string(), &"Data/root-1.json".to_string()));
 }
