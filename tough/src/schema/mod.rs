@@ -346,6 +346,20 @@ impl Targets {
 
         targets
     }
+
+    pub fn mimic(&self) -> Self {
+        Targets{
+            delegations: None,
+            .. self.clone()
+        }
+    }
+
+    pub fn with_delegation(self, delegations: Delegations) -> Self{
+        Targets{
+            delegations:Some(delegations),
+            .. self
+        }
+    }
 }
 
 impl Role for Targets {
@@ -381,7 +395,33 @@ pub struct DelegatedRole{
     pub targets: Option<Signed<Targets>>
 }
 
-///Targets can delegate paths as paths or path hash prefixes
+impl DelegatedRole{
+    pub fn mimic(&self) -> DelegatedRole{
+        let temp = self.clone();
+        if let Some(targets) = temp.targets { 
+            return DelegatedRole{
+                targets: Some(Signed {
+                    signed: targets.signed.mimic(),
+                    .. targets
+                }),
+                .. temp
+            }
+        }
+        temp
+    }
+
+    pub fn with_delegation(self, del:Delegations) -> Self {
+
+        DelegatedRole{
+            targets: Some(Signed {
+                signed: self.targets.clone().unwrap().signed.with_delegation(del),
+                .. self.targets.unwrap()
+            }),
+            .. self
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub enum PathSet{
 
@@ -551,6 +591,98 @@ impl Delegations {
         }
         targets
     }
+
+    /// Given an object/key that impls Sign, return the corresponding
+    /// key ID from Delegation
+    pub fn key_id(&self, key_pair: &dyn Sign) -> Option<Decoded<Hex>> {
+        for (key_id, key) in &self.keys {
+            println!("Checking with : {:?}", *key);
+            if key_pair.tuf_key() == *key {
+                return Some(key_id.clone());
+            }
+        }
+        None
+    }
+
+    pub fn key_map(&self, keys: &mut HashMap<String,HashMap<Decoded<Hex>, Key>>) {
+        for role in &self.roles {
+            if let Some(targets) = &role.targets{
+                if let Some(delegations) = &targets.signed.delegations {
+                    keys.insert(role.name.clone(), delegations.keys.clone());
+                    delegations.key_map(keys);
+                }
+            }
+        }
+    }
+
+    pub fn target_map(&self, target_map: &mut HashMap<String,HashMap<String,DelegatedRole>>) {
+        for role in &self.roles {
+            if let Some(targets) = &role.targets{
+                if let Some(delegations) = &targets.signed.delegations {
+                    let mut map = HashMap::new();
+                    for sub_role in &delegations.roles {
+                        if let Some(_t) = &sub_role.targets{
+                            map.insert(sub_role.name.clone(), sub_role.mimic());
+                        }
+                    }
+                    target_map.insert(role.name.clone(), map);
+                    delegations.target_map(target_map);
+                }
+            }
+        }
+    }
+
+    pub fn delegation_map(&self) -> DelegationsMap{
+        let mut keys = HashMap::new();
+        keys.insert("target".to_string(), self.keys.clone());
+        self.key_map(&mut keys);
+        let mut targets = HashMap::new();
+        let mut map = HashMap::new();
+        for sub_role in &self.roles {
+            // if let Some(t) = &sub_role.targets{
+            //     map.insert(sub_role.name.clone(), (&t.signed).mimic());
+            // }
+            map.insert(sub_role.name.clone(), sub_role.mimic());
+        }
+        targets.insert("target".to_string(), map);
+        self.target_map(&mut targets);
+        DelegationsMap{
+            keys,
+            roles:targets
+        }
+    }
+
+    pub fn build_from_map(delegations_map: &mut DelegationsMap) -> Delegations{
+        Delegations::build_by_name_from_map(delegations_map, &"target".to_string())
+    }
+
+    pub fn build_by_name_from_map(delegations_map: &mut DelegationsMap, name: &String) -> Delegations {
+        let mut roles = Vec::new();
+        for (name, del_role) in delegations_map.roles.remove(name).expect("name not found"){
+            roles.push(del_role.with_delegation(Delegations::build_by_name_from_map(delegations_map, &name)));
+        }
+        
+        Delegations{
+            keys: delegations_map.keys.remove(name).unwrap(),
+            roles: roles
+        }
+    }
+}
+
+impl DelegatedRole{
+    pub fn keys(&self) -> RoleKeys{
+        RoleKeys{
+            keyids:self.keyids.clone(),
+            threshold: self.threshold,
+            _extra: HashMap::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct DelegationsMap{
+    pub keys: HashMap<String, HashMap<Decoded<Hex>, Key>>,
+    pub roles: HashMap<String,HashMap<String, DelegatedRole>>,
 }
 
 // =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=
