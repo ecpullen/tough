@@ -3,6 +3,7 @@
 use crate::error::{self, Result};
 use crate::key_source::KeySource;
 use crate::schema::decoded::{Decoded, Hex};
+use crate::schema::{Root, Delegations};
 use crate::sign::Sign;
 use snafu::{ensure, ResultExt};
 use std::collections::HashMap;
