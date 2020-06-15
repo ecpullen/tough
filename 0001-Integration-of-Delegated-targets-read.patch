@@ -1,0 +1,726 @@
+From 94acd1fd3092f94e1ec971725edfc8b50fff23a1 Mon Sep 17 00:00:00 2001
+From: Pullen <pullenep@3c22fb78ceaf.ant.amazon.com>
+Date: Fri, 12 Jun 2020 08:40:19 -0400
+Subject: [PATCH] Integration of Delegated targets read
+
+---
+ .DS_Store                                     | Bin 0 -> 6148 bytes
+ Cargo.lock                                    |   1 +
+ tough/.DS_Store                               | Bin 0 -> 6148 bytes
+ tough/Cargo.toml                              |   1 +
+ tough/src/editor/mod.rs                       |   1 +
+ tough/src/error.rs                            |   5 +
+ tough/src/lib.rs                              |  91 ++++++-
+ tough/src/schema/de.rs                        |  37 +++
+ tough/src/schema/error.rs                     |  15 ++
+ tough/src/schema/mod.rs                       | 244 +++++++++++++++++-
+ tough/tests/.DS_Store                         | Bin 0 -> 6148 bytes
+ tough/tests/data/.DS_Store                    | Bin 0 -> 6148 bytes
+ tough/tests/data/tuf-reference-impl/.DS_Store | Bin 0 -> 6148 bytes
+ tough/tests/interop.rs                        |   4 +
+ 14 files changed, 394 insertions(+), 5 deletions(-)
+ create mode 100644 .DS_Store
+ create mode 100644 tough/.DS_Store
+ create mode 100644 tough/tests/.DS_Store
+ create mode 100644 tough/tests/data/.DS_Store
+ create mode 100644 tough/tests/data/tuf-reference-impl/.DS_Store
+
+diff --git a/.DS_Store b/.DS_Store
+new file mode 100644
+index 0000000000000000000000000000000000000000..b3b62715fc5382f1c29c0baec8f8c9f104441cf6
+GIT binary patch
+literal 6148
+zcmeHK%Wl&^6ur}?sgnvCA*3Q!-XO6^Q38b^A*7H85Q(N04zK{!+D&KzjvXZq5rm*@
+z_y;8T0ltL~;6wNTICnfMwi9+0Le*Sr=FH=sJDxMP$3sM-GHw@%aztbxF{ZM}mKgVQ
+zTCf$>vI!J2hELbXC7+Jy&4RaX&<bb;{x=2q-OW;!Y#P!r-rSS-x8eFnj_W(<=a0i3
+zq^rNAp_JqVVD`yPaK0rt7ckBq)u>Jf!28I#-bBk2lv)_OPwjXNv6YCisW>fqObx1l
+z*#b7{!BY081p7Qaf_D{n&?F1_Hr=Crq$)k6dSc|C3GT)McNei*ahBBSb3~^!M%t72
+zh*1;1tWVT83l&`&;On`K^qNMfdvT7`Bg)A@hdO3Zqg~)K1zCeABTa!??G6Qr=sf4B
+z?;3o48so|6#yxqS!idZ>;^|CA1NG#5cLr{66ch?S#L8-FExm4JaGf(=T3vr)1$HnV
+zRqWw&uI<}F*HPt`@4F{u+j-jSOb&7vtG*Z5J+CvA<X*c2mlw}^UfZ8k{IS;_$v9Tn
+z!Q*5Oa+jym>!m^|Zx(NsZqM@Ov{WkO&7B*!X0wd3b)|T>aoB(Ne)?hd@e8I76WGY4
+z@rx0)uc$;O`PLeGuJ0YAl^K~oLSgYnxcUjfu-Gxd*1;IlE6KyM$Gv%(W8Tp_IkmEy
+zs<Clu5p^J~fL7qFD8Szb6N#~`a2}%kbRd&Q0ALEu(op8#1?HFv%L?Zqq6a2IDlnu9
+zb;J-M9qp#_D=VCb7}80o!-r5K3w1&fa&*Kur8|joh&tB_Xa(X5tcKMb@Bj6`pa0_|
+zUDFC^1<sTLB2}|$6--I(tqYUmz1BoJL}FvVd5DsNOl`-qz+3SpBx&d~xd1FHoQH@O
+QnEnxvGU!Yz@J|)^4P4j$Z~y=R
+
+literal 0
+HcmV?d00001
+
+diff --git a/Cargo.lock b/Cargo.lock
+index 7aa27b8..aae2cc6 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -1856,6 +1856,7 @@ dependencies = [
+  "mockito 0.25.1 (registry+https://github.com/rust-lang/crates.io-index)",
+  "olpc-cjson 0.1.0",
+  "pem 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
++ "regex 1.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
+  "reqwest 0.10.4 (registry+https://github.com/rust-lang/crates.io-index)",
+  "ring 0.16.13 (registry+https://github.com/rust-lang/crates.io-index)",
+  "serde 1.0.110 (registry+https://github.com/rust-lang/crates.io-index)",
+diff --git a/tough/.DS_Store b/tough/.DS_Store
+new file mode 100644
+index 0000000000000000000000000000000000000000..099cf5b45a0d45bf08088faa0b4278e51976be12
+GIT binary patch
+literal 6148
+zcmeHK-EPw`6h2-%NH$=-KpNsIH%MHRspV%uLP%NH3Mw&}$OIRFwq&WcNLf5JDb-er
+za>F|y!3*##JOB^E1Hk8>PHVc|q6+y`$Dd=L?>PP{+c6Qb)*xyU)riP~3#=}oxWGie
+z@EKdsEjEzJ9GuoDCr(F{%tV_8qkvIh-V_jPcZoJBpgtX7<({qIZo>D&goo%Co5K_M
+z-9OS$Bf198bK0Pn^o%<6f?fgFu<oN0??;Ju1F>CjJ7D@K?;*!FTx9D^bJ=Q%yFA0)
+zLav<>>r07c(`$^gL2cRsUht0WcZpG<3~KC8=amY4J*U7TcDf!SbIMAQV$PRDhQsVw
+ztNJrMPU0+YG=8y#N_FwdRm;Zjy7j?7<U>CX@<G-L`tQWkc90*2y1v7Ca#jz*H*s&c
+zTf4c*(>#dNUSE>qsE3gEZ{sxL!xkT;Q6}^FszZ!p@78XQM)%!@TX&j|+{fd(GjiQV
+z-Ff(6eLS|U)jQ3n-Myoe)6u8#=Wm!0jA4_PwxV$Y-%&Xy$49@PCOkbr>x40hG&n~J
+z=s(9=o}+g%uVNH13e1NBVt;Vp0zHj|Lb-LIkXHa;70uF67oQ7)<7o6W77Eb=V~Pq?
+zRHm;OOwrNq=r~Vfp-|C@>B|SxBQt$NVRCfjcVsv*PoXJ|0!D#p1uE*XCeHuP<@f(-
+zl6f);7zO?-1z5H1w_BK!K3iudC(c?2z6Td3;tGY5f<hn1vLcS+TX1RUb3_H`X)F|?
+R1!g`3qztAo3j9+A{sIvUs>=WX
+
+literal 0
+HcmV?d00001
+
+diff --git a/tough/Cargo.toml b/tough/Cargo.toml
+index c8bfe32..b2822a6 100644
+--- a/tough/Cargo.toml
++++ b/tough/Cargo.toml
+@@ -22,6 +22,7 @@ snafu = "0.6.8"
+ untrusted = "0.7.0"
+ url = "2.1.0"
+ walkdir = "2.2.9"
++regex = "1"
+ 
+ [dev-dependencies]
+ hex-literal = "0.2.0"
+diff --git a/tough/src/editor/mod.rs b/tough/src/editor/mod.rs
+index ca09e82..5549fe7 100644
+--- a/tough/src/editor/mod.rs
++++ b/tough/src/editor/mod.rs
+@@ -313,6 +313,7 @@ impl RepositoryEditor {
+             expires,
+             targets,
+             _extra,
++            delegations: None,
+         })
+     }
+ 
+diff --git a/tough/src/error.rs b/tough/src/error.rs
+index 5b083af..a697d6b 100644
+--- a/tough/src/error.rs
++++ b/tough/src/error.rs
+@@ -357,6 +357,11 @@ pub enum Error {
+         source: walkdir::Error,
+         backtrace: Backtrace,
+     },
++
++    #[snafu(display("Target File not Delegated: {}", target_url))]
++    TargetNotFound {
++        target_url: String
++    },
+ }
+ 
+ // used in `std::io::Read` implementations
+diff --git a/tough/src/lib.rs b/tough/src/lib.rs
+index e28c31e..7b0e850 100644
+--- a/tough/src/lib.rs
++++ b/tough/src/lib.rs
+@@ -32,6 +32,7 @@ pub mod sign;
+ mod transport;
+ 
+ #[cfg(feature = "http")]
++use crate::schema::{Delegations, DelegatedRole, Target};
+ pub use crate::transport::HttpTransport;
+ pub use crate::transport::{FilesystemTransport, Transport};
+ 
+@@ -45,6 +46,7 @@ use std::borrow::Cow;
+ use std::io::Read;
+ use std::path::Path;
+ use url::Url;
++use std::collections::HashMap;
+ 
+ /// Represents whether a Repository should fail to load when metadata is expired (`Safe`) or whether
+ /// it should ignore expired metadata (`Unsafe`). Only use `Unsafe` if you are sure you need it.
+@@ -289,6 +291,10 @@ impl<'a, T: Transport> Repository<'a, T> {
+         &self.timestamp
+     }
+ 
++    pub fn get_targets(&self) -> Vec<&Target>{
++        self.targets.signed.get_targets()
++    }
++
+     /// Fetches a target from the repository.
+     ///
+     /// If the repository metadata is expired or there is an issue making the request, `Err` is
+@@ -329,7 +335,7 @@ impl<'a, T: Transport> Repository<'a, T> {
+         //   found earlier in step 4. In either case, the client MUST write the file to
+         //   non-volatile storage as FILENAME.EXT.
+         Ok(
+-            if let Some(target) = self.targets.signed.targets.get(name) {
++            if let Ok(target) = self.targets.signed.find_target(name) {
+                 let (sha256, file) = self.target_digest_and_filename(target, name);
+                 Some(self.fetch_target(target, &sha256, file.as_str())?)
+             } else {
+@@ -337,6 +343,13 @@ impl<'a, T: Transport> Repository<'a, T> {
+             },
+         )
+     }
++
++    pub fn get_role(&self, name: &str) -> Result<&DelegatedRole>{
++        match self.targets.signed.get_del_role(name) {
++            Ok(del_role) => Ok(del_role),
++            _ => Err(error::Error::TargetNotFound{target_url:name.to_string()})
++        }
++    }
+ }
+ 
+ /// Ensures that system time has not stepped backward since it was last sampled
+@@ -808,7 +821,7 @@ fn load_targets<T: Transport>(
+             specifier,
+         )?)
+     };
+-    let targets: Signed<crate::schema::Targets> =
++    let mut targets: Signed<crate::schema::Targets> =
+         serde_json::from_reader(reader).context(error::ParseMetadata {
+             role: RoleType::Targets,
+         })?;
+@@ -874,10 +887,84 @@ fn load_targets<T: Transport>(
+ 
+     // Now that everything seems okay, write the targets file to the datastore.
+     datastore.create("targets.json", &targets)?;
++    // print!("\"{}role1.json\"",metadata_base_url);
++    load_delegations(transport, snapshot, metadata_base_url, max_targets_size, &mut targets.signed.delegations.as_mut().unwrap())?;
+ 
+     Ok(targets)
+ }
+ 
++fn load_delegations <T: Transport>(
++    transport: &T,
++    snapshot: &Signed<Snapshot>,
++    metadata_base_url: &Url,
++    max_targets_size: u64,
++    delegation: &mut Delegations,
++) -> Result<()>{
++    let mut delegated_roles:HashMap<String, Option<Signed<crate::schema::Targets>>> = HashMap::new();
++    for del_role in & delegation.roles {
++        print!("{}",del_role.name);
++        let role_meta = snapshot.signed.meta.get(&format!("{}.json",&del_role.name)).unwrap();
++        print!("\"{}{}.json\"",metadata_base_url, &del_role.name);
++        // let read = File::open(format!("{}{}.json",metadata_base_url, &del_role.name)).unwrap();
++
++
++
++
++        let path = format!("{}.json", &del_role.name);
++        let role_url = metadata_base_url.join(&path).context(error::JoinUrl {
++            path,
++            url: metadata_base_url.to_owned(),
++        })?;
++        let specifier = "max_targets_size parameter";
++        
++        let reader = Box::new(fetch_max_size(
++                transport,
++                role_url,
++                max_targets_size,
++                specifier,
++            )?);
++        let role: Signed<crate::schema::Targets> =
++            serde_json::from_reader(reader).context(error::ParseMetadata {
++                role: RoleType::Targets,
++            })?;
++
++
++
++
++
++
++
++
++        // let role: Signed<crate::schema::Targets> =
++        // serde_json::from_reader(read).context(error::ParseMetadata {
++        //     role: RoleType::Targets,
++        // })?;
++        delegation
++        .verify_role(&role, &del_role.name)
++        .context(error::VerifyMetadata {
++            role: RoleType::Targets,
++        })?;
++        ensure!(
++            role.signed.version == role_meta.version,
++            error::VersionMismatch {
++                role: RoleType::Targets,
++                fetched: role.signed.version,
++                expected: role_meta.version
++            }
++        );
++        {
++            role.signed.delegations.as_ref().unwrap().verify_paths().expect("Invalid path found");
++        }
++        delegated_roles.insert(del_role.name.clone(),Some(role));
++    }
++    for del_role in &mut delegation.roles{
++        del_role.targets = delegated_roles.remove(&del_role.name).unwrap();
++        print!("About to load: {}", del_role.name);
++        load_delegations(transport, snapshot, metadata_base_url, max_targets_size, &mut del_role.targets.as_mut().unwrap().signed.delegations.as_mut().unwrap())?;
++    }
++    Ok(())
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+diff --git a/tough/src/schema/de.rs b/tough/src/schema/de.rs
+index 075af19..08efdfd 100644
+--- a/tough/src/schema/de.rs
++++ b/tough/src/schema/de.rs
+@@ -1,3 +1,4 @@
++use crate::schema::DelegatedRole;
+ use crate::schema::decoded::{Decoded, Hex};
+ use crate::schema::error;
+ use crate::schema::key::Key;
+@@ -63,6 +64,42 @@ where
+     deserializer.deserialize_map(Visitor)
+ }
+ 
++// /// Deserializes roles field in a delegated target
++// pub(super) fn deserialize_path<'de, D>(
++//     deserializer: D,
++// ) -> Result<HashMap<String, DelegatedRole>, D::Error>
++// where
++//     D: Deserializer<'de>,
++// {
++//     // The rest of this is fitting the above function into serde and doing error type conversion.
++//     struct Visitor;
++
++//     impl<'de> serde::de::Visitor<'de> for Visitor {
++//         type Value = HashMap<String, DelegatedRole>;
++
++//         fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
++//             formatter.write_str("an array")
++//         }
++
++//         fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
++//         where
++//             M: serde::de::MapAccess<'de>,
++//         {
++//             let mut map = HashMap::new();
++//             let mut role = DelegatedRole::new();
++//             while let Some((keyid, key)) = access.next_entry()? {
++//                match keyid {
++//                    "name" => role.name = key,
++//                    "threshold"
++//                }
++//             }
++//             Ok(map)
++//         }
++//     }
++ 
++//     deserializer.deserialize_map(Visitor)
++// }
++
+ /// Deserializes the `_extra` field on roles, skipping the `_type` tag.
+ pub(super) fn extra_skip_type<'de, D>(
+     deserializer: D,
+diff --git a/tough/src/schema/error.rs b/tough/src/schema/error.rs
+index a89eb85..929fc2f 100644
+--- a/tough/src/schema/error.rs
++++ b/tough/src/schema/error.rs
+@@ -18,6 +18,10 @@ pub enum Error {
+     #[snafu(display("Duplicate key ID: {}", keyid))]
+     DuplicateKeyId { keyid: String },
+ 
++    /// A duplicate key ID was present in the root metadata.
++    #[snafu(display("Duplicate role name: {}", name))]
++    DuplicateRoleName { name: String },
++
+     /// Unable to open a file
+     #[snafu(display("Failed to open '{}': {}", path.display(), source))]
+     FileOpen {
+@@ -93,6 +97,17 @@ pub enum Error {
+     /// Unable to create a TUF target from anything but a file
+     #[snafu(display("TUF targets must be files, given: '{}'", path.display()))]
+     TargetNotAFile { path: PathBuf, backtrace: Backtrace },
++
++
++    #[snafu(display("Invalid file permissions: {}", child))]
++    UnmatchedPath {
++        child: String
++    },
++
++    #[snafu(display("Target File not Delegated: {}", target_url))]
++    TargetNotFound {
++        target_url: String
++    },
+ }
+ 
+ /// Wrapper for error types that don't impl [`std::error::Error`].
+diff --git a/tough/src/schema/mod.rs b/tough/src/schema/mod.rs
+index 7852f9b..1cd6b32 100644
+--- a/tough/src/schema/mod.rs
++++ b/tough/src/schema/mod.rs
+@@ -16,16 +16,19 @@ use crate::schema::key::Key;
+ use crate::sign::Sign;
+ use chrono::{DateTime, Utc};
+ use olpc_cjson::CanonicalFormatter;
+-use ring::digest::{Context, SHA256};
++use ring::digest::{Context, digest, SHA256};
+ use serde::{Deserialize, Serialize};
+ use serde_json::Value;
+ use serde_plain::{forward_display_to_serde, forward_from_str_to_serde};
+-use snafu::ResultExt;
++use snafu::{ResultExt, ensure};
+ use std::collections::HashMap;
+ use std::fs::File;
+ use std::io::Read;
+ use std::num::NonZeroU64;
+ use std::path::Path;
++use url::Url;
++use regex::Regex;
++pub use crate::transport::{FilesystemTransport, Transport};
+ 
+ /// A role type.
+ #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Hash)]
+@@ -233,7 +236,7 @@ pub struct Targets {
+     pub version: NonZeroU64,
+     pub expires: DateTime<Utc>,
+     pub targets: HashMap<String, Target>,
+-
++    pub delegations: Option<Delegations>,
+     /// Extra arguments found during deserialization.
+     ///
+     /// We must store these to correctly verify signatures for this object.
+@@ -308,7 +311,38 @@ impl Targets {
+             expires,
+             targets: HashMap::new(),
+             _extra: HashMap::new(),
++            delegations: None,
++        }
++    }
++
++    pub fn find_target(&self, target_url: &str) -> Result<&Target>{
++        match self.targets.get(target_url) {
++            Some(target) => return Ok(target),
++            None => {
++                match &self.delegations {
++                    None => return Err(Error::TargetNotFound{target_url:target_url.clone().to_string()}),
++                    Some(delegations) => return delegations.find_target(target_url)
++                }
++            }
++        }
++    }
++
++    pub fn get_del_role(&self, name:&str) -> Result<&DelegatedRole>{
++        self.delegations.as_ref().unwrap().get_del_role(name)
++    }
++
++    pub fn get_targets(&self) -> Vec<&Target>{
++        let mut targets = Vec::new();
++        for target in &self.targets {
++            targets.push(target.1);
+         }
++        if let Some(del) = &self.delegations {
++            for t in del.get_targets() {
++                targets.push(t);
++            }
++        }
++
++        targets
+     }
+ }
+ 
+@@ -324,6 +358,187 @@ impl Role for Targets {
+     }
+ }
+ 
++//Implementation for delegated targets
++#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
++pub struct Delegations {
++    #[serde(deserialize_with = "de::deserialize_keys")]
++    pub keys: HashMap<Decoded<Hex>, Key>,
++    pub roles: Vec<DelegatedRole>
++}
++
++#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
++pub struct DelegatedRole{
++    pub name: String,
++    pub keyids: Vec<Decoded<Hex>>,
++    pub threshold: NonZeroU64,
++    #[serde(flatten)]
++    paths: PathSet,
++    terminating: bool,
++    #[serde(skip)]
++    pub targets: Option<Signed<Targets>>
++}
++
++#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
++pub enum PathSet{
++
++    #[serde(rename = "paths")]
++    Paths(
++        Vec<String>
++    ),
++
++    #[serde(rename = "path_hash_prefixes")]
++    PathHashPrefixes(
++        Vec<String> 
++    )
++}
++
++impl PathSet{
++    fn matched_target(&self, target: &String) -> bool{
++        match self{
++            Self::Paths(paths) => {
++                for path in paths {
++                    if Self::matched_path(path, target) {
++                        return true
++                    }
++                }
++            }
++
++            Self::PathHashPrefixes(path_prefixes) => {
++                for path in path_prefixes {
++                    if Self::matched_prefix(path, target) {
++                        return true
++                    }
++                }
++            }
++        }
++        false
++    }
++
++    fn matched_prefix(prefix: &String, target: &String) -> bool{
++        let temp_target = target.clone();
++        let hash = digest(&SHA256, temp_target.as_bytes());
++        hash.as_ref().starts_with(prefix.as_bytes())
++    }
++
++    fn matched_path(wildcardpath: &String, target: &String) -> bool{
++        let mut regex_string = wildcardpath.clone();
++        regex_string = regex_string.replace(".", "\\.");
++        regex_string = regex_string.replace("*", "[^/]*");
++        regex_string = regex_string.replace("?", ".");
++        let re = Regex::new(&regex_string).unwrap();
++        re.is_match(&target)
++    }
++}
++
++impl Delegations {
++    ///determines if target passes shell wildcard of path
++    pub fn check_target(&self, target: &String) -> bool{
++        for role in &self.roles {
++            if role.paths.matched_target(target) {
++                return true
++            }
++        }
++        false
++    }
++
++    pub fn verify_paths(&self) -> Result<()>{
++        for sub_role in &self.roles {
++            for path in match &sub_role.paths{
++                PathSet::Paths(paths) => paths,
++                PathSet::PathHashPrefixes(paths) => paths
++            } {
++                if !self.check_target(&path) {
++                    return Err(Error::UnmatchedPath{child:path.to_string()})
++                }
++            }
++        }
++        Ok(())
++    }
++
++    pub fn get_role(&self, role_name: &String) -> Option<&DelegatedRole>{
++        for role in &self.roles {
++            if &role.name == role_name {
++                return Some(&role)
++            }
++        }
++        None
++    }
++
++    pub fn verify_role(&self, role: &Signed<Targets>, name: &String) -> Result<()> {
++        let role_keys = self
++            .get_role(name)
++            .expect("Role not found");
++        let mut valid = 0;
++
++        let mut data = Vec::new();
++        let mut ser = serde_json::Serializer::with_formatter(&mut data, CanonicalFormatter::new());
++        role.signed
++            .serialize(&mut ser)
++            .context(error::JsonSerialization {
++                what: format!("Targets role"),
++            })?;
++
++        for signature in &role.signatures {
++            if role_keys.keyids.contains(&signature.keyid) {
++                if let Some(key) = self.keys.get(&signature.keyid) {
++                    if key.verify(&data, &signature.sig) {
++                        valid += 1;
++                    }
++                }
++            }
++        }
++
++        ensure!(
++            valid >= u64::from(role_keys.threshold),
++            error::SignatureThreshold {
++                role: RoleType::Targets,
++                threshold: role_keys.threshold,
++                valid,
++            }
++        );
++        Ok(())
++    }
++
++    pub fn find_target(&self, target_url: &str) -> Result<&Target>{
++        for del_role in &self.roles {
++            match &del_role.targets{
++                Some(targets) => match &targets.signed.find_target(target_url) {
++                    Ok(target) => return Ok(target),
++                    _ => continue
++                },
++                None => continue
++            }
++            
++        }
++        Err(Error::TargetNotFound{target_url:target_url.to_string()})
++    }
++
++    pub fn get_del_role(&self, name:&str)->Result<&DelegatedRole>{
++        for del_role in &self.roles {
++            if del_role.name == name {
++                return Ok(&del_role)
++            }
++            match del_role.targets.as_ref().unwrap().signed.get_del_role(name) {
++                Ok(del) => return Ok(del),
++                _ => continue
++            }
++        }
++        Err(Error::TargetNotFound{target_url:name.to_string()})
++    }
++
++    pub fn get_targets(&self) -> Vec<&Target> {
++        let mut targets = Vec::<&Target>::new();
++        for role in &self.roles {
++            if let Some(t) = &role.targets {
++                for t in t.signed.get_targets() {
++                    targets.push(t);
++                }
++            }
++        }
++        targets
++    }
++}
++
+ // =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=
+ 
+ #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+@@ -383,3 +598,26 @@ impl Role for Timestamp {
+         self.version
+     }
+ }
++
++
++#[test]
++fn test_matches_ast(){
++    assert!(PathSet::matched_path(&"Metadata/root.json".to_string(), &"Metadata/root.json".to_string()));
++    assert!(PathSet::matched_path(&"Metadata/*.json".to_string(), &"Metadata/root.json".to_string()));
++    assert!(PathSet::matched_path(&"Metadata/root.*".to_string(), &"Metadata/root.json".to_string()));
++    assert!(PathSet::matched_path(&"Metadata/*.*".to_string(), &"Metadata/root.json".to_string()));
++}
++
++#[test]
++fn test_matches_qtm(){
++    assert!(PathSet::matched_path(&"Metadata/root.json".to_string(), &"Metadata/root.json".to_string()));
++    assert!(PathSet::matched_path(&"Metadata/root-?.json".to_string(), &"Metadata/root-2.json".to_string()));
++    assert!(!PathSet::matched_path(&"Metadata/root-?.json".to_string(), &"Metadata/root-12.json".to_string()));
++}
++
++#[test]
++fn test_matches_both(){
++    assert!(PathSet::matched_path(&"Metadata/root.json".to_string(), &"Metadata/root.json".to_string()));
++    assert!(PathSet::matched_path(&"Metadata/root-?.*".to_string(), &"Metadata/root-2.json".to_string()));
++    assert!(PathSet::matched_path(&"*/root-?.json".to_string(), &"Data/root-1.json".to_string()));
++}
+\ No newline at end of file
+diff --git a/tough/tests/.DS_Store b/tough/tests/.DS_Store
+new file mode 100644
+index 0000000000000000000000000000000000000000..da2f7c5e87c559b074eeb84684ff84147b035926
+GIT binary patch
+literal 6148
+zcmeHK&5qMB5FYOqXcrZFKw99G3lfJ4wZIaj6;f1|!`_gB-~gzbw1Gy-##NGTfl`zU
+z?|=j^z_aiGJO~c}-`J+=X2TUK<f-g$W<2AcFL7KGkr>RzeWDH#HBlHFJE&@e+qs;P
+zE#u)v!F?Piaug;qgv}jVu?$!SHk$$7yA2vsKm`Sr{kxC0n?IGPMXch&c|JA!{98Cp
+z;=JhfzKgBx#<}wsnl1d=&6oZ}&ix`NX89n<p0o8hC?=uNpGcXk^dNj1NAqFl%0rnJ
+zL7YaJN{+`7LS8(J)3KZn<SZTMsvloB@Hnku=lWuC+wHksr@!akUv`~^>-M_N-8=V|
+z%T{yuM*qR#(ec}Ni}%Y9pY@Xv_*5ymZ16XHfwEfSiJzs3Okcyt@z*G#H#DV~GDTHP
+zl2RJNo6;-j8I7PHE4!duu=5I;U(w4tnLFq!1?drDC3>#O5xbR~Hew^hN{l?hJVrEu
+zU6=W>l6h$@Gs5GJF*47(F84<zx2<NGqaM->bxaB6b(zF3%%`;%2BwwGWx#BN=EcpO
+zqMey#z%uZU7~t=NgTm+;EH$c62P$<105;%O0$u&}2RiHkdIn34@IZu41?p5`t{B4H
+z9E46syJzA{jXIr#8X5hVk%hUT2y^iejtVE?X|%Ovz%p=}fo*Me`22tL=llQZBx_j)
+zECc@)1EO)@9}KW0bGDvY9G|rg$`J|+$CVmY3Mz9PD}|5Zt0+p)=CA_v43-+<f!IF+
+NiUwO*2L37ozW|d3tHuBT
+
+literal 0
+HcmV?d00001
+
+diff --git a/tough/tests/data/.DS_Store b/tough/tests/data/.DS_Store
+new file mode 100644
+index 0000000000000000000000000000000000000000..d6a7f834b1cfae9b4c86d56cd1f34d14a7eb65aa
+GIT binary patch
+literal 6148
+zcmeHK-EPw`6h7Vxv;(wiLMnor+#qpLP|IJD5K>jf#qN-b-~!N=G})Gs##NH8lv30i
+z-T?_-fM?+Wcn}@{zGJ&pn+%C@fe`Yk?C-=m=d=Aeu^S>1ouS_(suEEdg|W1O>ICEa
+zTne^kTFwK7;s~inE@c$ZjY70-unJfO{xt>o-Q6UghBTmvmfzpkc#Fqq@pmHG^CIaX
+zlDCNmDA#`|gGaQ5xHrfSDS_wX&1W2tq!eu#Frjgd<4ca?>IobYnHkuQz#}P!$9xCy
+zc!wEsFRQGgR$vVgeT;aXnI75cSw9q5`(R6{ug1}%!^NzN+zSmU&5iYYj<tr7N~K+q
+zr7-V2n_82POKY;BwCbxh<-It;wYxe3;x$;#xqukfmd7kH!-#GoKcN0<o>F-^Z%eJl
+zzUn2QePr<Z$2bYN=MXyK$;xrCrl;ocM(MyjhhM!x6sB3D@lC9)m(H9$SFYf9vHYrg
+zC`aAQ&4y{mO<wTT6E{2bjQ>>1XyLowvoIL#Rxdr0aps0`kf`L)4-oS5c^Lb0)RDv3
+zPZdvB-{5{KyVWa`$*oqSRd<?qTlc4RXVPjl>du|p_omZIxpuAjaA&VSemi+Leg6ql
+zg$W#x$~Fzo;WM1ylJK~j#F2~-5I^UdbNnG1nlkSJ)~o_n0jt2W0=z#sD2#1`GmUEN
+zK&3tbfF(35gU^2wIL9&AHaOFWJ20VBfjU)~PYj{c(e9YIw!xW3ole4hd<fICFkdJ_
+z^$vbVg_CG&w6#^hDzK`+y1uOP`TzLW-~X#g_R1<?75J|d5T)(zb_Y{3XKP_{eAYTB
+sdnjxiH`Az6P?_UcIeZjfMp1@)4m-fM!I?(1!0aCZC4;T30)JJ3pK%@gLI3~&
+
+literal 0
+HcmV?d00001
+
+diff --git a/tough/tests/data/tuf-reference-impl/.DS_Store b/tough/tests/data/tuf-reference-impl/.DS_Store
+new file mode 100644
+index 0000000000000000000000000000000000000000..13a26e69508d7f8286950e1060b901ffe525f4f0
+GIT binary patch
+literal 6148
+zcmeHK!EO^V5FMv!yDNm6L!}~4z94akPy&UmgpigrJ@kNtSOkZH+TCu{uC!fO*$ok-
+zLHi%{2l_310G|VIY*Qtqy;Z0n&uaX};~86iw(K<#iQXvf619lPgEBUJ6junhvo1)(
+zdX|Ag_mNUe6~()`I$Vf$j@!rpuboFHG~jikne|I@m7t9`#&hVypITsD5uc39Qyc$1
+zInA@O>U4gH#!_>6W!3ZX-Ss|3$7&o^aWyJ?@o<l8ujA@CvG!Y~@=H5T-erUFertVO
+z6;+%SgP~5&(g8v~yw8eMjeBZTq^0gBG7UVAzu&q)nLG|UL0fj823ym%oCHCqEjOP$
+zn@)Xi<3abu?!n3DFO#$B*Kc|<B(Qb0tXcdG=P(wi`4kO{Top%X<2;|<&<?$%KD`1y
+z0+A_i{u%Nv5H(BQswR3!N1F0-K3Z)25sj)7$ADwNF>vz?*n`izbMsxh9vuUYfq$F<
+zJ|85MF|=44)JF#j{R99u;no71e;GMPS`01L2GIf$CKYH>g?(ZOlMcVMaiPW9ph+iT
+zA0NVwEbI$K=+V)?)ZrvTgRXQ8I0oh!STfZX-~T(;zyIfxT+K1y82GOk5Y2wn?_o;z
+zZe5rh-?b8Y0A=C0+Tdjh41E<NmapP_P%ZFFHh`hU+8{g-_amTbaD`*wuQKopnUQ%~
+
+literal 0
+HcmV?d00001
+
+diff --git a/tough/tests/interop.rs b/tough/tests/interop.rs
+index ac90d2b..a57f2d4 100644
+--- a/tough/tests/interop.rs
++++ b/tough/tests/interop.rs
+@@ -71,6 +71,10 @@ fn test_tuf_reference_impl() {
+             .unwrap(),
+         "0644"
+     );
++    println!("{:?}", repo.targets().signed.delegations);
++    assert!(repo.targets().signed.delegations.as_ref().unwrap().check_target(&"file3.txt".to_string()));
++    println!("{}", repo.targets().signed.delegations.as_ref().unwrap().check_target(&"file1.txt".to_string()));
++    println!("{:?}", repo.get_targets());
+ }
+ 
+ #[cfg(feature = "http")]
+-- 
+2.27.0
+
