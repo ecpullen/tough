@@ -1,4 +1,3 @@
-use crate::schema::DelegatedRole;
 use crate::schema::decoded::{Decoded, Hex};
 use crate::schema::error;
 use crate::schema::key::Key;
@@ -63,42 +62,6 @@ where
 
     deserializer.deserialize_map(Visitor)
 }
-
-// /// Deserializes roles field in a delegated target
-// pub(super) fn deserialize_path<'de, D>(
-//     deserializer: D,
-// ) -> Result<HashMap<String, DelegatedRole>, D::Error>
-// where
-//     D: Deserializer<'de>,
-// {
-//     // The rest of this is fitting the above function into serde and doing error type conversion.
-//     struct Visitor;
-
-//     impl<'de> serde::de::Visitor<'de> for Visitor {
-//         type Value = HashMap<String, DelegatedRole>;
-
-//         fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-//             formatter.write_str("an array")
-//         }
-
-//         fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
-//         where
-//             M: serde::de::MapAccess<'de>,
-//         {
-//             let mut map = HashMap::new();
-//             let mut role = DelegatedRole::new();
-//             while let Some((keyid, key)) = access.next_entry()? {
-//                match keyid {
-//                    "name" => role.name = key,
-//                    "threshold"
-//                }
-//             }
-//             Ok(map)
-//         }
-//     }
- 
-//     deserializer.deserialize_map(Visitor)
-// }
 
 /// Deserializes the `_extra` field on roles, skipping the `_type` tag.
 pub(super) fn extra_skip_type<'de, D>(

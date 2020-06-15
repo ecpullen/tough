@@ -26,7 +26,6 @@ use std::fs::File;
 use std::io::Read;
 use std::num::NonZeroU64;
 use std::path::Path;
-use url::Url;
 use regex::Regex;
 pub use crate::transport::{FilesystemTransport, Transport};
 
@@ -315,6 +314,7 @@ impl Targets {
         }
     }
 
+    ///Given a target url, returns a reference to the Target struct or error if the target is unreachable
     pub fn find_target(&self, target_url: &str) -> Result<&Target>{
         match self.targets.get(target_url) {
             Some(target) => return Ok(target),
@@ -327,10 +327,12 @@ impl Targets {
         }
     }
 
+    ///Given the name of a delegated role, return the delegated role
     pub fn get_del_role(&self, name:&str) -> Result<&DelegatedRole>{
         self.delegations.as_ref().unwrap().get_del_role(name)
     }
 
+    ///Returns a vec of all targets and all delegated targets recursively
     pub fn get_targets(&self) -> Vec<&Target>{
         let mut targets = Vec::new();
         for target in &self.targets {
@@ -366,6 +368,7 @@ pub struct Delegations {
     pub roles: Vec<DelegatedRole>
 }
 
+///Each role delegated in a targets file is considered a delegated role
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct DelegatedRole{
     pub name: String,
@@ -378,6 +381,7 @@ pub struct DelegatedRole{
     pub targets: Option<Signed<Targets>>
 }
 
+///Targets can delegate paths as paths or path hash prefixes
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub enum PathSet{
 
@@ -393,6 +397,8 @@ pub enum PathSet{
 }
 
 impl PathSet{
+
+    ///Given a target string determines if paths match
     fn matched_target(&self, target: &String) -> bool{
         match self{
             Self::Paths(paths) => {
@@ -414,12 +420,14 @@ impl PathSet{
         false
     }
 
+    ///Given a path hash prefix and a target path determines if target is delegated by prefix
     fn matched_prefix(prefix: &String, target: &String) -> bool{
         let temp_target = target.clone();
         let hash = digest(&SHA256, temp_target.as_bytes());
         hash.as_ref().starts_with(prefix.as_bytes())
     }
 
+    ///Given a shell style wildcard path determines if target matches the path
     fn matched_path(wildcardpath: &String, target: &String) -> bool{
         let mut regex_string = wildcardpath.clone();
         regex_string = regex_string.replace(".", "\\.");
@@ -431,7 +439,7 @@ impl PathSet{
 }
 
 impl Delegations {
-    ///determines if target passes shell wildcard of path
+    ///Determines if target passes pathset specific matching
     pub fn check_target(&self, target: &String) -> bool{
         for role in &self.roles {
             if role.paths.matched_target(target) {
@@ -441,6 +449,7 @@ impl Delegations {
         false
     }
 
+    ///Ensures that all delegated paths are allowed to be delegated
     pub fn verify_paths(&self) -> Result<()>{
         for sub_role in &self.roles {
             for path in match &sub_role.paths{
@@ -455,6 +464,7 @@ impl Delegations {
         Ok(())
     }
 
+    ///Returns given role if its a child of struct
     pub fn get_role(&self, role_name: &String) -> Option<&DelegatedRole>{
         for role in &self.roles {
             if &role.name == role_name {
@@ -464,6 +474,7 @@ impl Delegations {
         None
     }
 
+    ///verifies that roles matches contain valid keys
     pub fn verify_role(&self, role: &Signed<Targets>, name: &String) -> Result<()> {
         let role_keys = self
             .get_role(name)
@@ -499,6 +510,7 @@ impl Delegations {
         Ok(())
     }
 
+    ///Finds target using pre ordered search given target_url or error if the target is not found
     pub fn find_target(&self, target_url: &str) -> Result<&Target>{
         for del_role in &self.roles {
             match &del_role.targets{
@@ -513,6 +525,7 @@ impl Delegations {
         Err(Error::TargetNotFound{target_url:target_url.to_string()})
     }
 
+    ///Given a role name recursively searches for the delegated role
     pub fn get_del_role(&self, name:&str)->Result<&DelegatedRole>{
         for del_role in &self.roles {
             if del_role.name == name {
@@ -526,6 +539,7 @@ impl Delegations {
         Err(Error::TargetNotFound{target_url:name.to_string()})
     }
 
+    ///Returns all targets delegated by this struct recursively
     pub fn get_targets(&self) -> Vec<&Target> {
         let mut targets = Vec::<&Target>::new();
         for role in &self.roles {
@@ -597,27 +611,4 @@ impl Role for Timestamp {
     fn version(&self) -> NonZeroU64 {
         self.version
     }
-}
-
-
-#[test]
-fn test_matches_ast(){
-    assert!(PathSet::matched_path(&"Metadata/root.json".to_string(), &"Metadata/root.json".to_string()));
-    assert!(PathSet::matched_path(&"Metadata/*.json".to_string(), &"Metadata/root.json".to_string()));
-    assert!(PathSet::matched_path(&"Metadata/root.*".to_string(), &"Metadata/root.json".to_string()));
-    assert!(PathSet::matched_path(&"Metadata/*.*".to_string(), &"Metadata/root.json".to_string()));
-}
-
-#[test]
-fn test_matches_qtm(){
-    assert!(PathSet::matched_path(&"Metadata/root.json".to_string(), &"Metadata/root.json".to_string()));
-    assert!(PathSet::matched_path(&"Metadata/root-?.json".to_string(), &"Metadata/root-2.json".to_string()));
-    assert!(!PathSet::matched_path(&"Metadata/root-?.json".to_string(), &"Metadata/root-12.json".to_string()));
-}
-
-#[test]
-fn test_matches_both(){
-    assert!(PathSet::matched_path(&"Metadata/root.json".to_string(), &"Metadata/root.json".to_string()));
-    assert!(PathSet::matched_path(&"Metadata/root-?.*".to_string(), &"Metadata/root-2.json".to_string()));
-    assert!(PathSet::matched_path(&"*/root-?.json".to_string(), &"Data/root-1.json".to_string()));
 }

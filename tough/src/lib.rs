@@ -893,6 +893,7 @@ fn load_targets<T: Transport>(
     Ok(targets)
 }
 
+//Follow the paths of delegations starting with the top level targets.json delegation
 fn load_delegations <T: Transport>(
     transport: &T,
     snapshot: &Signed<Snapshot>,
@@ -902,13 +903,8 @@ fn load_delegations <T: Transport>(
 ) -> Result<()>{
     let mut delegated_roles:HashMap<String, Option<Signed<crate::schema::Targets>>> = HashMap::new();
     for del_role in & delegation.roles {
-        print!("{}",del_role.name);
+        //find the role file metadata
         let role_meta = snapshot.signed.meta.get(&format!("{}.json",&del_role.name)).unwrap();
-        print!("\"{}{}.json\"",metadata_base_url, &del_role.name);
-        // let read = File::open(format!("{}{}.json",metadata_base_url, &del_role.name)).unwrap();
-
-
-
 
         let path = format!("{}.json", &del_role.name);
         let role_url = metadata_base_url.join(&path).context(error::JoinUrl {
@@ -916,29 +912,19 @@ fn load_delegations <T: Transport>(
             url: metadata_base_url.to_owned(),
         })?;
         let specifier = "max_targets_size parameter";
-        
+        //load the role json file
         let reader = Box::new(fetch_max_size(
                 transport,
                 role_url,
                 max_targets_size,
                 specifier,
             )?);
+        //since each role is a targets, we load them as such
         let role: Signed<crate::schema::Targets> =
             serde_json::from_reader(reader).context(error::ParseMetadata {
                 role: RoleType::Targets,
             })?;
-
-
-
-
-
-
-
-
-        // let role: Signed<crate::schema::Targets> =
-        // serde_json::from_reader(read).context(error::ParseMetadata {
-        //     role: RoleType::Targets,
-        // })?;
+        //verify each role with the delegation
         delegation
         .verify_role(&role, &del_role.name)
         .context(error::VerifyMetadata {
@@ -957,9 +943,9 @@ fn load_delegations <T: Transport>(
         }
         delegated_roles.insert(del_role.name.clone(),Some(role));
     }
+    //load all roles delegated by this role
     for del_role in &mut delegation.roles{
         del_role.targets = delegated_roles.remove(&del_role.name).unwrap();
-        print!("About to load: {}", del_role.name);
         load_delegations(transport, snapshot, metadata_base_url, max_targets_size, &mut del_role.targets.as_mut().unwrap().signed.delegations.as_mut().unwrap())?;
     }
     Ok(())
