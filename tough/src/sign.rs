@@ -4,7 +4,7 @@
 use crate::error::{self, Result};
 use crate::schema::key::Key;
 use ring::rand::SecureRandom;
-use ring::signature::{KeyPair, RsaKeyPair};
+use ring::signature::{KeyPair, RsaKeyPair, Ed25519KeyPair};
 use snafu::ResultExt;
 use std::collections::HashMap;
 

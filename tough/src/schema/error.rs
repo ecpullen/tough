@@ -98,12 +98,13 @@ pub enum Error {
     #[snafu(display("TUF targets must be files, given: '{}'", path.display()))]
     TargetNotAFile { path: PathBuf, backtrace: Backtrace },
 
-
+    /// Target doesn't have proper permissions from parent delegations
     #[snafu(display("Invalid file permissions: {}", child))]
     UnmatchedPath {
         child: String
     },
 
+    /// No valid targets claims target_url
     #[snafu(display("Target File not Delegated: {}", target_url))]
     TargetNotFound {
         target_url: String
