@@ -10,7 +10,8 @@ use crate::editor::signed::{SignedRepository, SignedRole};
 use crate::error::{self, Result};
 use crate::key_source::KeySource;
 use crate::schema::{
-    Hashes, Role, Root, Signed, Snapshot, SnapshotMeta, Target, Targets, Timestamp, TimestampMeta,
+    Hashes, Role, Root, Signed, Snapshot, SnapshotMeta, Target, Targets, Timestamp, 
+    TimestampMeta, DelegationsMap, Delegations,
 };
 use crate::transport::Transport;
 use crate::Repository;
@@ -43,6 +44,8 @@ const SPEC_VERSION: &str = "1.0.0";
 #[derive(Debug)]
 pub struct RepositoryEditor {
     signed_root: SignedRole<Root>,
+
+    pub delegations_map: Option<DelegationsMap>,
 
     new_targets: Option<HashMap<String, Target>>,
     existing_targets: Option<HashMap<String, Target>>,
@@ -84,6 +87,7 @@ impl RepositoryEditor {
 
         Ok(RepositoryEditor {
             signed_root,
+            delegations_map:None,
             new_targets: None,
             existing_targets: None,
             targets_version: None,
@@ -134,12 +138,44 @@ impl RepositoryEditor {
         let signed_timestamp = self
             .build_timestamp(&signed_snapshot)
             .and_then(|timestamp| SignedRole::new(timestamp, root, keys, &rng))?;
+        let signed_del_targets = SignedRole::<Targets>::del_roles(self.delegations_map.unwrap(),keys, &rng)?;
 
         Ok(SignedRepository {
             root: self.signed_root,
             targets: signed_targets,
             snapshot: signed_snapshot,
             timestamp: signed_timestamp,
+            delegations: signed_del_targets,
+        })
+    }
+
+    /// Builds and signs each required role and returns a complete signed set
+    /// of TUF repository metadata.
+    ///
+    /// While `RepositoryEditor`s fields are all `Option`s, this step requires,
+    /// at the very least, that the "version" and "expiration" field is set for
+    /// each role; e.g. `targets_version`, `targets_expires`, etc.
+    pub fn sign_2(self, root_keys: &[Box<dyn KeySource>], targets_keys:  &[Box<dyn KeySource>]) -> Result<SignedRepository> {
+        let rng = SystemRandom::new();
+        let root = &self.signed_root.signed.signed;
+
+        let signed_targets = self
+            .build_targets()
+            .and_then(|targets| SignedRole::new(targets, root, root_keys, &rng))?;
+        let signed_snapshot = self
+            .build_snapshot(&signed_targets)
+            .and_then(|snapshot| SignedRole::new(snapshot, root, root_keys, &rng))?;
+        let signed_timestamp = self
+            .build_timestamp(&signed_snapshot)
+            .and_then(|timestamp| SignedRole::new(timestamp, root, root_keys, &rng))?;
+        let signed_del_targets = SignedRole::<Targets>::del_roles(self.delegations_map.unwrap(),targets_keys, &rng)?;
+
+        Ok(SignedRepository {
+            root: self.signed_root,
+            targets: signed_targets,
+            snapshot: signed_snapshot,
+            timestamp: signed_timestamp,
+            delegations: signed_del_targets,
         })
     }
 
@@ -158,6 +194,12 @@ impl RepositoryEditor {
         // Hold on to the existing targets
         self.existing_targets = Some(targets.targets);
         self.targets_extra = Some(targets._extra);
+
+        // Hold on to the delegations data
+        if let Some(del) = targets.delegations {
+            self.delegations_map = Some(del.delegation_map());
+        }
+
         Ok(self)
     }
 
@@ -307,13 +349,16 @@ impl RepositoryEditor {
         }
 
         let _extra = self.targets_extra.clone().unwrap_or_else(HashMap::new);
+
+        let delegations = Delegations::build_from_map(&mut self.delegations_map.clone().unwrap());
+
         Ok(Targets {
             spec_version: SPEC_VERSION.to_string(),
             version,
             expires,
             targets,
             _extra,
-            delegations: None,
+            delegations: Some(delegations),
         })
     }
 

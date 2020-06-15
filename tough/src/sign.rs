@@ -41,6 +41,29 @@ impl Sign for RsaKeyPair {
     }
 }
 
+/// Implements the Sign trait for ED25519
+impl Sign for  Ed25519KeyPair{
+    fn tuf_key(&self) -> Key {
+        use crate::schema::key::{Ed25519Key, Ed25519Scheme};
+
+        Key::Rsa {
+            keyval: RsaKey {
+                public: self.public_key().as_ref().to_vec().into(),
+                _extra: HashMap::new(),
+            },
+            scheme: RsaScheme::RsassaPssSha256,
+            _extra: HashMap::new(),
+        }
+    }
+
+    fn sign(&self, msg: &[u8], rng: &dyn SecureRandom) -> Result<Vec<u8>> {
+        let mut signature = vec![0; self.public_modulus_len()];
+        self.sign(&ring::signature::RSA_PSS_SHA256, rng, msg, &mut signature)
+            .context(error::Sign)?;
+        Ok(signature)
+    }
+}
+
 /// Parses a supplied keypair and if it is recognized, returns an object that
 /// implements the Sign trait
 pub fn parse_keypair(key: &[u8]) -> Result<impl Sign> {

@@ -56,11 +56,14 @@ fn load_tuf_reference_impl<'a>(paths: &'a mut RepoPaths) -> Repository<'a, Files
 #[test]
 fn repository_editor_from_repository() {
     // Load the reference_impl repo
+    println!("running repo-edit from repo");
     let mut repo_paths = RepoPaths::new();
     let root = repo_paths.root_path.clone();
     let repo = load_tuf_reference_impl(&mut repo_paths);
+    let x = RepositoryEditor::from_repo(&root, repo);
+    assert!(x.is_ok());
 
-    assert!(RepositoryEditor::from_repo(&root, repo).is_ok());
+    println!("{:?}", x.unwrap().delegations_map);
 }
 
 // Load a repository, edit it, and write it to disk. Ensure it loads correctly
@@ -73,6 +76,7 @@ fn repo_load_edit_write_load() {
     let root = test_data().join("simple-rsa").join("root.json");
     let root_key = test_data().join("snakeoil.pem");
     let key_source = LocalKeySource { path: root_key };
+    let targets_key_source = LocalKeySource { path: test_data().join("targets_key")};
     let timestamp_expiration = Utc::now().checked_add_signed(Duration::days(3)).unwrap();
     let timestamp_version = NonZeroU64::new(1234).unwrap();
     let snapshot_expiration = Utc::now().checked_add_signed(Duration::days(21)).unwrap();
@@ -103,17 +107,19 @@ fn repo_load_edit_write_load() {
         .add_target_path(target3)
         .unwrap();
 
+        // println!("{:?}", editor.delegations_map);
+
     // Sign the newly updated repo
-    let signed_repo = editor.sign(&[Box::new(key_source)]).unwrap();
+    let signed_repo = editor.sign_2(&[Box::new(key_source)],&[Box::new(targets_key_source)]).unwrap();
 
     // Create the directories and write the repo to disk
     let destination = TempDir::new().unwrap();
-    let metadata_destination = destination.as_ref().join("metadata");
-    let targets_destination = destination.as_ref().join("targets");
+    let metadata_destination = destination.as_ref().join("metadata-1");
+    let targets_destination = destination.as_ref().join("targets-1");
     assert!(signed_repo.write(&metadata_destination).is_ok());
-    assert!(signed_repo
-        .link_targets(&targets_location, &targets_destination)
-        .is_ok());
+    // assert!(signed_repo
+    //     .link_targets(&targets_location, &targets_destination)
+    //     .is_ok());
 
     // Load the repo we just created
     let datastore = TempDir::new().unwrap();
