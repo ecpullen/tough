@@ -1,6 +1,7 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use crate::sign::parse_targets_keypair;
 use crate::error;
 use crate::sign::{parse_keypair, Sign};
 use snafu::ResultExt;
@@ -27,11 +28,33 @@ pub struct LocalKeySource {
     pub path: PathBuf,
 }
 
+#[derive(Debug)]
+pub struct LocalTargetsKeySource {
+    pub path: PathBuf,
+}
+
 /// Implements the `KeySource` trait for a `LocalKeySource` (file)
 impl KeySource for LocalKeySource {
     fn as_sign(&self) -> Result<Box<dyn Sign>, Box<dyn std::error::Error + Send + Sync + 'static>> {
         let data = std::fs::read(&self.path).context(error::FileRead { path: &self.path })?;
         Ok(Box::new(parse_keypair(&data)?))
+    }
+
+    fn write(
+        &self,
+        value: &str,
+        _key_id_hex: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+        Ok(std::fs::write(&self.path, value.as_bytes())
+            .context(error::FileWrite { path: &self.path })?)
+    }
+}
+
+/// Implements the `KeySource` trait for a `LocalTargetsKeySource` (file)
+impl KeySource for LocalTargetsKeySource {
+    fn as_sign(&self) -> Result<Box<dyn Sign>, Box<dyn std::error::Error + Send + Sync + 'static>> {
+        let data = std::fs::read(&self.path).context(error::FileRead { path: &self.path })?;
+        Ok(Box::new(parse_targets_keypair(&data)?))
     }
 
     fn write(

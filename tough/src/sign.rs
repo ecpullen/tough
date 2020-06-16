@@ -18,33 +18,31 @@ pub trait Sign: Sync + Send {
     fn sign(&self, msg: &[u8], rng: &dyn SecureRandom) -> Result<Vec<u8>>;
 }
 
-/// Implements the Sign trait for RSA keypairs
-impl Sign for RsaKeyPair {
+/// Implements the Sign trait for ED25519
+impl Sign for  Ed25519KeyPair{
     fn tuf_key(&self) -> Key {
-        use crate::schema::key::{RsaKey, RsaScheme};
+        use crate::schema::key::{Ed25519Key, Ed25519Scheme};
 
-        Key::Rsa {
-            keyval: RsaKey {
+        Key::Ed25519 {
+            keyval: Ed25519Key {
                 public: self.public_key().as_ref().to_vec().into(),
                 _extra: HashMap::new(),
             },
-            scheme: RsaScheme::RsassaPssSha256,
+            scheme: Ed25519Scheme::Ed25519,
             _extra: HashMap::new(),
         }
     }
 
     fn sign(&self, msg: &[u8], rng: &dyn SecureRandom) -> Result<Vec<u8>> {
-        let mut signature = vec![0; self.public_modulus_len()];
-        self.sign(&ring::signature::RSA_PSS_SHA256, rng, msg, &mut signature)
-            .context(error::Sign)?;
-        Ok(signature)
+        let signature = self.sign(msg);
+        Ok(signature.as_ref().to_vec())
     }
 }
 
-/// Implements the Sign trait for ED25519
-impl Sign for  Ed25519KeyPair{
+/// Implements the Sign trait for RSA keypairs
+impl Sign for RsaKeyPair {
     fn tuf_key(&self) -> Key {
-        use crate::schema::key::{Ed25519Key, Ed25519Scheme};
+        use crate::schema::key::{RsaKey, RsaScheme};
 
         Key::Rsa {
             keyval: RsaKey {
@@ -82,6 +80,15 @@ pub fn parse_keypair(key: &[u8]) -> Result<impl Sign> {
             _ => error::KeyUnrecognized.fail(),
         }
     } else {
+        error::KeyUnrecognized.fail()
+    }
+}
+
+pub fn parse_targets_keypair(key: &[u8]) -> Result<impl Sign> {
+    Ed25519KeyPair::from_pkcs8(key).unwrap();
+    if let Ok(ed25519_key_pair) = Ed25519KeyPair::from_pkcs8(key){
+        Ok(ed25519_key_pair)
+    } else{
         error::KeyUnrecognized.fail()
     }
 }

@@ -11,7 +11,7 @@ use crate::error::{self, Result};
 use crate::key_source::KeySource;
 use crate::schema::{
     Hashes, Role, Root, Signed, Snapshot, SnapshotMeta, Target, Targets, Timestamp, 
-    TimestampMeta, DelegationsMap, Delegations,
+    TimestampMeta, DelegationsMap, Delegations, DelegatedRole, PathSet,
 };
 use crate::transport::Transport;
 use crate::Repository;
@@ -23,6 +23,7 @@ use snafu::{ensure, OptionExt, ResultExt};
 use std::collections::HashMap;
 use std::num::NonZeroU64;
 use std::path::Path;
+use std::convert::TryInto;
 
 const SPEC_VERSION: &str = "1.0.0";
 
@@ -439,4 +440,21 @@ impl RepositoryEditor {
             _extra: HashMap::new(),
         }
     }
+
+    // pub fn add_delegation(&mut self, from: String, name: String, paths: PathSet){
+    //     let mut keyids = Vec::new();
+    //     {
+    //         for (key, _) in self.delegations_map.as_ref().unwrap().keys.get(&from).clone().unwrap(){
+    //             keyids.push(*key.clone());
+    //         }
+    //     }
+    //     self.delegations_map.as_mut().unwrap().roles.get(&from).as_mut().unwrap().insert(name.clone(), DelegatedRole{
+    //         name,
+    //         keyids, 
+    //         threshold: NonZeroU64::new(keyids.len().try_into().unwrap()).unwrap(),
+    //         terminating: false,
+    //         paths,
+    //         targets: None
+    //     });
+    // }
 }

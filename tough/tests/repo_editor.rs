@@ -9,8 +9,11 @@ use std::path::PathBuf;
 use tempfile::TempDir;
 use test_utils::{dir_url, test_data};
 use tough::editor::RepositoryEditor;
-use tough::key_source::LocalKeySource;
+use tough::key_source::{LocalKeySource,LocalTargetsKeySource};
 use tough::{ExpirationEnforcement, FilesystemTransport, Limits, Repository, Settings};
+use ring::rand::SystemRandom;
+use ring::signature;
+use std::io::prelude::Write;
 
 mod test_utils;
 
@@ -66,6 +69,20 @@ fn repository_editor_from_repository() {
     println!("{:?}", x.unwrap().delegations_map);
 }
 
+#[test]
+fn gen_and_store_ed25519_keys() {
+    let rng = SystemRandom::new();
+    let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng).unwrap();
+
+    // Normally the application would store the PKCS#8 file persistently. Later
+    // it would read the PKCS#8 file from persistent storage to use it.
+    
+    let key_pair = signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref()).unwrap();
+
+    let mut buffer = File::create(test_data().join("targetskey")).unwrap();
+    buffer.write_all(pkcs8_bytes.as_ref()).unwrap();
+}
+
 // Load a repository, edit it, and write it to disk. Ensure it loads correctly
 // and attempt to read a target
 #[test]
@@ -76,7 +93,7 @@ fn repo_load_edit_write_load() {
     let root = test_data().join("simple-rsa").join("root.json");
     let root_key = test_data().join("snakeoil.pem");
     let key_source = LocalKeySource { path: root_key };
-    let targets_key_source = LocalKeySource { path: test_data().join("targets_key")};
+    let targets_key_source = LocalTargetsKeySource { path: test_data().join("targetskey")};
     let timestamp_expiration = Utc::now().checked_add_signed(Duration::days(3)).unwrap();
     let timestamp_version = NonZeroU64::new(1234).unwrap();
     let snapshot_expiration = Utc::now().checked_add_signed(Duration::days(21)).unwrap();

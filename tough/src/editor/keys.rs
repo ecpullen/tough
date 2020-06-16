@@ -16,13 +16,10 @@ pub(crate) type RootKeys = HashMap<Decoded<Hex>, Box<dyn Sign>>;
 /// `KeySource`s.
 pub(crate) fn get_root_keys(root: &Root, keys: &[Box<dyn KeySource>]) -> Result<RootKeys> {
     let mut root_keys = RootKeys::new();
-
-    println!("{:?}", keys);
     for source in keys {
         // Get a keypair from the given source
         let key_pair = source.as_sign().context(error::KeyPairFromKeySource)?;
 
-        println!("Key: {:?}", key_pair.tuf_key());
         // If the keypair matches any of the keys in the root.json,
         // add its ID and corresponding keypair the map to be returned
         if let Some(key_id) = root.key_id(key_pair.as_ref()) {
@@ -35,11 +32,9 @@ pub(crate) fn get_root_keys(root: &Root, keys: &[Box<dyn KeySource>]) -> Result<
 
 pub(crate) fn get_del_keys(delegations: &Delegations, keys: &[Box<dyn KeySource>]) -> Result<RootKeys> {
     let mut root_keys = RootKeys::new();
-    println!("{:?}", keys);
     for source in keys {
         // Get a keypair from the given source
         let key_pair = source.as_sign().context(error::KeyPairFromKeySource)?;
-        println!("Key: {:?}", key_pair.tuf_key());
         // If the keypair matches any of the keys in the root.json,
         // add its ID and corresponding keypair the map to be returned
         if let Some(key_id) = delegations.key_id(key_pair.as_ref()) {
