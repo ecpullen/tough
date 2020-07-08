@@ -60,7 +60,7 @@ pub trait Role: Serialize {
 }
 
 /// A signed metadata object.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)] 
 pub struct Signed<T> {
     /// The role that is signed.
     pub signed: T,
@@ -364,6 +364,19 @@ impl Targets {
         targets
     }
 
+    ///Returns a hashmap of all targets and all delegated targets recursively with consistent snapshot names
+    pub fn targets_map_consistent(&self) -> HashMap<String, &Target> {
+        let mut targets = HashMap::new();
+        for target in &self.targets {
+            targets.insert(format!("{}.{}",hex::encode(&target.1.hashes.sha256),target.0.clone()), target.1);
+        }
+        if let Some(delegations) = &self.delegations {
+            targets.extend(delegations.targets_map_consistent());
+        }
+
+        targets
+    }
+
     ///Returns a vec of all rolenames
     pub fn role_names(&self) -> Vec<&String> {
         let mut roles = Vec::new();
@@ -408,8 +421,29 @@ impl Targets {
         })
     }
 
+    pub fn signed_targets_by_name(&self, name: &str) -> Result<&Signed<Self>> {
+        if let Some(delegations) = &self.delegations {
+            for role in &delegations.roles {
+                if let Some(targets) = &role.targets {
+                    if role.name == name {
+                        return Ok(&targets);
+                    } else if let Ok(role) = targets.signed.signed_targets_by_name(name) {
+                        return Ok(role);
+                    }
+                }
+            }
+        }
+        Err(Error::RoleNotFound {
+            name: name.to_string(),
+        })
+    }
+
     pub fn add_target(&mut self, name: &str, target: Target) {
         self.targets.insert(name.to_string(), target);
+    }
+
+    pub fn remove_target(&mut self, name: &str) -> Option<Target> {
+        self.targets.remove(name)
     }
 
     ///Returns a vec of all rolenames
@@ -427,19 +461,38 @@ impl Targets {
         roles
     }
 
-    pub fn get_del_role_by_name(&mut self, name: &str) -> Result<&mut DelegatedRole> {
+    pub fn get_delegated_role_by_name(&mut self, name: &str) -> Result<&mut DelegatedRole> {
         if let Some(delegations) = &mut self.delegations {
             for role in &mut delegations.roles {
                 if role.name == name {
                     return Ok(role);
                 } else if let Some(targets) = &mut role.targets {
-                    if let Ok(role) = targets.signed.get_del_role_by_name(name) {
+                    if let Ok(role) = targets.signed.get_delegated_role_by_name(name) {
                         return Ok(role);
                     }
                 }
             }
         }
         Err(Error::RoleNotFound {
+            name: name.to_string(),
+        })
+    }
+
+    /// Returns a reference to the parent delegation of `name`
+    pub fn parent_of(&self, name: &str) -> Result<&Delegations> {
+        if let Some(delegations) = &self.delegations {
+            for role in &delegations.roles {
+                if role.name == name {
+                    return Ok(&delegations);
+                }
+                if let Some(targets) = &role.targets {
+                    if let Ok(delegation) = targets.signed.parent_of(name) {
+                        return Ok(delegation);
+                    }
+                }
+            }
+        }
+        Err(error::Error::RoleNotFound {
             name: name.to_string(),
         })
     }
@@ -592,7 +645,6 @@ impl Delegations {
             .context(error::JsonSerialization {
                 what: format!("{} role", name.to_string()),
             })?;
-
         for signature in &role.signatures {
             if role_keys.keyids.contains(&signature.keyid) {
                 if let Some(key) = self.keys.get(&signature.keyid) {
@@ -671,6 +723,17 @@ impl Delegations {
         targets
     }
 
+    ///Returns all targets delegated by this struct recursively with consistent snapshot prefixes
+    pub fn targets_map_consistent(&self) -> HashMap<String, &Target> {
+        let mut targets = HashMap::new();
+        for role in &self.roles {
+            if let Some(t) = &role.targets {
+                targets.extend(t.signed.targets_map_consistent());
+            }
+        }
+        targets
+    }
+
     /// Given an object/key that impls Sign, return the corresponding
     /// key ID from Delegation
     pub fn key_id(&self, key_pair: &dyn Sign) -> Option<Decoded<Hex>> {
@@ -681,6 +744,12 @@ impl Delegations {
         }
         None
     }
+
+    // pub fn update_role(&mut self, name: &str, role: Signed<Targets>) -> Result<()>{
+    //     let idx = self.roles.iter().position(|&role| role.name == name).ok_or(error::Error::RoleNotFound{name:name.to_string()})?;
+    //     self.roles[idx].targets = Some(role);
+    //     Ok(())
+    // }
 }
 
 impl DelegatedRole {
@@ -690,6 +759,30 @@ impl DelegatedRole {
             threshold: self.threshold,
             _extra: HashMap::new(),
         }
+    }
+
+    //link all current targets to new_targets metadata, returns a list of new_targets not included in the original targets
+    pub fn update_targets(&mut self, mut new_targets: Signed<Targets>) -> Vec<String> {
+        let mut needed_roles = Vec::new();
+        // Copy existing targets into proper places of new_targets
+        if let Some(targets) = &self.targets {
+            if let Some(delegations) = &mut new_targets.signed.delegations {
+                for mut role in &mut delegations.roles {
+                    // find the corresponding targets for role
+                    if let Ok(targets) = targets.signed.signed_targets_by_name(&role.name) {
+                        role.targets = Some(targets.clone());
+                    } else {
+                        needed_roles.push(role.name.clone());
+                    }
+                }
+            }
+        }
+
+        // Copy new targets to existing targets
+        self.targets = Some(new_targets);
+
+        // Return the roles that did not have existing targets loaded
+        needed_roles
     }
 }
 

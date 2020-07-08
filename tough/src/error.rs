@@ -366,6 +366,12 @@ pub enum Error {
     #[snafu(display("Delegated role not found: {}", name))]
     DelegateNotFound { name: String },
 
+    #[snafu(display("Targets role not found: {}", name))]
+    TargetsNotFound {
+        name: String,
+        source: crate::schema::Error,
+    },
+
     #[snafu(display("Delegated role not found: {}", name))]
     DelegateMissing {
         name: String,
@@ -394,6 +400,9 @@ pub enum Error {
         source: schema::error::Error,
         backtrace: Backtrace,
     },
+
+    #[snafu(display("No keys were found for {}", role))]
+    NoKeys { role: String },
 
     #[snafu(display("Invalid number"))]
     InvalidInto {
