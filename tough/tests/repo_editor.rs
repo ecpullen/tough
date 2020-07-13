@@ -98,7 +98,9 @@ fn test_repo_editor() -> RepositoryEditor {
     let mut editor = RepositoryEditor::new(&root).unwrap();
     editor
         .targets_expires(targets_expiration)
+        .unwrap()
         .targets_version(targets_version)
+        .unwrap()
         .snapshot_expires(snapshot_expiration)
         .snapshot_version(snapshot_version)
         .timestamp_expires(timestamp_expiration)
@@ -141,7 +143,9 @@ fn cre_sig_wri_rel() {
     let mut editor = RepositoryEditor::new(&root).unwrap();
     editor
         .targets_expires(targets_expiration)
+        .unwrap()
         .targets_version(targets_version)
+        .unwrap()
         .snapshot_expires(snapshot_expiration)
         .snapshot_version(snapshot_version)
         .timestamp_expires(timestamp_expiration)
@@ -309,7 +313,9 @@ fn partial_sign() {
     let mut editor = RepositoryEditor::new(&root).unwrap();
     editor
         .targets_expires(targets_expiration)
+        .unwrap()
         .targets_version(targets_version)
+        .unwrap()
         .snapshot_expires(snapshot_expiration)
         .snapshot_version(snapshot_version)
         .timestamp_expires(timestamp_expiration)
@@ -414,7 +420,9 @@ fn partial_sign() {
 
     editor
         .targets_expires(targets_expiration)
+        .unwrap()
         .targets_version(targets_version)
+        .unwrap()
         .snapshot_expires(snapshot_expiration)
         .snapshot_version(snapshot_version)
         .timestamp_expires(timestamp_expiration)
@@ -475,7 +483,9 @@ fn partial_invalid_sign() {
     let mut editor = RepositoryEditor::new(&root).unwrap();
     editor
         .targets_expires(targets_expiration)
+        .unwrap()
         .targets_version(targets_version)
+        .unwrap()
         .snapshot_expires(snapshot_expiration)
         .snapshot_version(snapshot_version)
         .timestamp_expires(timestamp_expiration)
@@ -580,7 +590,9 @@ fn partial_invalid_sign() {
 
     editor
         .targets_expires(targets_expiration)
+        .unwrap()
         .targets_version(targets_version)
+        .unwrap()
         .snapshot_expires(snapshot_expiration)
         .snapshot_version(snapshot_version)
         .timestamp_expires(timestamp_expiration)
@@ -641,7 +653,9 @@ fn repo_load_edit_write_load() {
     // implementation of `SignedRepository.link_targets()`.
     editor
         .targets_expires(targets_expiration)
+        .unwrap()
         .targets_version(targets_version)
+        .unwrap()
         .snapshot_expires(snapshot_expiration)
         .snapshot_version(snapshot_version)
         .timestamp_expires(timestamp_expiration)
@@ -825,7 +839,9 @@ fn create_role_flow() {
     let targets_version = NonZeroU64::new(789).unwrap();
     editor
         .targets_expires(targets_expiration)
+        .unwrap()
         .targets_version(targets_version)
+        .unwrap()
         .snapshot_expires(snapshot_expiration)
         .snapshot_version(snapshot_version)
         .timestamp_expires(timestamp_expiration)
@@ -1140,7 +1156,9 @@ fn update_targets_flow() {
     let targets_version = NonZeroU64::new(789).unwrap();
     editor
         .targets_expires(targets_expiration)
+        .unwrap()
         .targets_version(targets_version)
+        .unwrap()
         .snapshot_expires(snapshot_expiration)
         .snapshot_version(snapshot_version)
         .timestamp_expires(timestamp_expiration)
