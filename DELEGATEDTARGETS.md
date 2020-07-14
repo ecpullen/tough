@@ -4,12 +4,6 @@
 
 Delegated targets creates a chain of trust from a repository owner to its developers. tough allows users to delegate a set of paths from the repository to another person. A delegation chain is cryptographically checked to ensure that the all updated targets are from the developer that signed the metadata. tuftool offers commands to create a new delegated target as a delegatee, add a delegated role as a delegator, and update the targets of a delegated role.
 
-## Workflow
-
-### Add a Delegation
-
-### Edit Targets
-
 ## Tools
 
 All tuftool commands use `--role` to define the command users key permissions.
@@ -134,3 +128,10 @@ The `update` command is used to refresh the timestamp and snapshot metadata, it 
     * `-j, --jobs` (Optional)
         * Number of target hashing threads to run when adding targets
 
+## Workflow
+
+### Add a Delegation
+<img src="./adddelegation.png">
+
+### Edit Targets
+<img src="./edittargets.png">
