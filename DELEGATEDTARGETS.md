@@ -1,4 +1,4 @@
-# Delegated Targets Readme
+# Delegated Targets
 
 ## Introduction
 
