@@ -85,27 +85,7 @@ where
             sig: sig.into(),
         });
 
-        // Serialize the newly signed role, and calculate its length and
-        // sha256.
-        let mut buffer = serde_json::to_vec_pretty(&role).context(error::SerializeSignedRole {
-            role: T::TYPE.to_string(),
-        })?;
-        buffer.push(b'\n');
-        let length = buffer.len() as u64;
-
-        let mut sha256 = [0; SHA256_OUTPUT_LEN];
-        sha256.copy_from_slice(digest(&SHA256, &buffer).as_ref());
-
-        // Create the `SignedRole` containing, the `Signed<role>`, serialized
-        // buffer, length and sha256.
-        let signed_role = SignedRole {
-            signed: role,
-            buffer,
-            sha256,
-            length,
-        };
-
-        Ok(signed_role)
+        SignedRole::from_signed(role)
     }
 
     /// Creates a `SignedRole<Role>` from a `Signed<Role>`.
@@ -135,7 +115,7 @@ where
     }
 
     /// creates a map of all signed targets roles excluding the toplevel Targets
-    ///  if `include_all`, throw error if needed keys are not present if not just ignore
+    /// if `include_all`, throw error if needed keys are not present if not just ignore
     pub fn new_targets(
         role: &Targets,
         keys: &[Box<dyn KeySource>],
@@ -191,9 +171,10 @@ where
 
                 role
             } else if include_all {
-                // Make sure the signature is valid targets
-                //only sign targets that we have keys for without throwing an error
-                //delegations allow a key to sign some roles without having to sign them all
+                // Make sure the signature of targets are valid
+                // any targets here were not signed by the provided keys
+                // delegations allow a key to sign some roles without having to sign them all
+                // so as long as the original signature is valid the Targets is ok
                 delegations
                     .verify_role(targets, &name)
                     .context(error::KeyNotFound { role: name.clone() })?;
@@ -203,18 +184,6 @@ where
                 targets.clone()
             };
 
-            // Serialize the newly signed role, and calculate its length and
-            // sha256.
-            let mut buffer =
-                serde_json::to_vec_pretty(&role).context(error::SerializeSignedRole {
-                    role: T::TYPE.to_string(),
-                })?;
-            buffer.push(b'\n');
-            let length = buffer.len() as u64;
-
-            let mut sha256 = [0; SHA256_OUTPUT_LEN];
-            sha256.copy_from_slice(digest(&SHA256, &buffer).as_ref());
-
             // Add all delegated targets roles from targets to our map of roles
             signed_roles.extend(SignedRole::<Targets>::new_targets(
                 &role.signed.clone(),
@@ -222,15 +191,9 @@ where
                 rng,
                 include_all,
             )?);
-            // Create the `SignedRole` containing, the `Signed<role>`, serialized
-            // buffer, length and sha256.
-            let signed_role = SignedRole {
-                signed: role,
-                buffer,
-                sha256,
-                length,
-            };
-            signed_roles.insert(name, signed_role);
+
+            // Add the new signed role to the map
+            signed_roles.insert(name, SignedRole::from_signed(role)?);
         }
 
         Ok(signed_roles)
