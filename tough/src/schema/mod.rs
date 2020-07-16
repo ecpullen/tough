@@ -4,7 +4,7 @@
 
 mod de;
 pub mod decoded;
-mod error;
+pub mod error;
 mod iter;
 pub mod key;
 mod spki;
@@ -998,6 +998,159 @@ impl DelegatedRole {
             }
         }
         Ok(())
+    }
+
+    /// A string notification if keys are different between roles
+    pub fn key_diff(&self, new_role: &DelegatedRole) -> String {
+        if self.keyids == new_role.keyids {
+            "".to_string()
+        } else {
+            "\n\tKeyids will be updated".to_string()
+        }
+    }
+
+    /// A string notification if threshold is different between roles
+    pub fn threshold_diff(&self, new_role: &DelegatedRole) -> String {
+        if self.threshold == new_role.threshold {
+            "".to_string()
+        } else {
+            format!(
+                "\n\tThreshold change from {} to {}",
+                self.threshold, new_role.threshold
+            )
+        }
+    }
+
+    /// A string notification if paths is different between roles
+    pub fn paths_diff(&self, new_role: &DelegatedRole) -> String {
+        if self.paths == new_role.paths {
+            "".to_string()
+        } else {
+            "\n\tPaths will be updated".to_string()
+        }
+    }
+
+    /// A string notification if targets are different between `Targets`
+    pub fn targets_diff(targets: &Targets, new_targets: &Targets) -> String {
+        if targets.targets == new_targets.targets {
+            "".to_string()
+        } else {
+            let mut all_targets = HashMap::new();
+            all_targets.extend(new_targets.targets.clone());
+            let new_targets_map = new_targets.targets.clone();
+            all_targets.extend(targets.targets.clone());
+            let mut removed_targets = Vec::new();
+            for target in targets.targets.keys() {
+                all_targets.remove(target);
+                if new_targets_map.get(target).is_none() {
+                    removed_targets.push(target);
+                }
+            }
+            let mut remove_string = "".to_string();
+            if !removed_targets.is_empty() {
+                remove_string = "\n\tRemove Targets:".to_string();
+                for target in removed_targets {
+                    remove_string = format!("{}\n\t\t{}", remove_string, target);
+                }
+            }
+            let mut added_string = "".to_string();
+            if !all_targets.is_empty() {
+                added_string = "\n\tAdd Targets:".to_string();
+                for target in all_targets.keys() {
+                    added_string = format!("{}\n\t\t{}", added_string, target);
+                }
+            }
+            format!("{}{}", remove_string, added_string)
+        }
+    }
+
+    /// A string notification if delegations are different between `Delegations`
+    pub fn delegations_diff(
+        delegations: &Delegations,
+        new_delegations: &Delegations,
+        updated_roles: &mut Vec<(DelegatedRole, DelegatedRole)>,
+    ) -> String {
+        if delegations.roles == new_delegations.roles {
+            "".to_string()
+        } else {
+            let mut all_roles = HashMap::new();
+            for role in &delegations.roles {
+                all_roles.insert(role.name.clone(), role);
+            }
+            let mut new_roles_map = HashMap::new();
+            for role in &new_delegations.roles {
+                new_roles_map.insert(&role.name, ());
+                let replaced = all_roles.insert(role.name.clone(), role);
+                if let Some(replaced) = replaced {
+                    if replaced != role {
+                        updated_roles.push((role.clone(), replaced.clone()))
+                    }
+                }
+            }
+            let mut removed_roles = Vec::new();
+            for role in &delegations.roles {
+                all_roles.remove(&role.name);
+                if new_roles_map.get(&role.name).is_none() {
+                    removed_roles.push(role);
+                }
+            }
+            let mut remove_string = "".to_string();
+            if !removed_roles.is_empty() {
+                remove_string = "\n\tRemove Roles:".to_string();
+                for role in removed_roles {
+                    remove_string = format!("{}\n\t\t{}", remove_string, role.name);
+                }
+            }
+            let mut added_string = "".to_string();
+            if !all_roles.is_empty() {
+                added_string = "\n\tAdd Roles:".to_string();
+                for role in all_roles.keys() {
+                    added_string = format!("{}\n\t\t{}", added_string, role);
+                }
+            }
+            format!("{}{}", remove_string, added_string)
+        }
+    }
+
+    /// Returns a string representation of the differences between 2 `DelegatedRoles`
+    pub fn diff_string(&self, new_role: &DelegatedRole) -> Result<String> {
+        let key_diff = self.key_diff(new_role);
+        let threshold_diff = self.threshold_diff(new_role);
+        let paths_diff = self.paths_diff(new_role);
+        let targets = &self
+            .targets
+            .as_ref()
+            .ok_or_else(|| error::Error::NoTargets)?
+            .signed;
+        let new_targets = &new_role
+            .targets
+            .as_ref()
+            .ok_or_else(|| error::Error::NoTargets)?
+            .signed;
+        let targets_diff = DelegatedRole::targets_diff(targets, new_targets);
+        let delegations = &targets
+            .delegations
+            .as_ref()
+            .ok_or_else(|| error::Error::NoDelegations)?;
+        let new_delegations = &new_targets
+            .delegations
+            .as_ref()
+            .ok_or_else(|| error::Error::NoDelegations)?;
+        let mut updated_roles = Vec::new();
+        let delegations_diff =
+            DelegatedRole::delegations_diff(delegations, new_delegations, &mut updated_roles);
+        let mut update_string = "".to_string();
+        if !updated_roles.is_empty() {
+            update_string = "\n\tUpdate Roles:".to_string();
+            for (old, new) in updated_roles {
+                update_string =
+                    format!("{}\n{}{}", update_string, &old.name, old.diff_string(&new)?);
+            }
+        }
+        Ok(format!(
+            "{}{}{}{}{}{}",
+            key_diff, threshold_diff, paths_diff, targets_diff, delegations_diff, update_string
+        ))
     }
 }
 

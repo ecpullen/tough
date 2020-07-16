@@ -202,6 +202,28 @@ fn create_add_role_command() {
     let new_targets_version: u64 = 170;
     let update_out = TempDir::new().unwrap();
 
+    // print the changes created by adding the role
+    let changes = Command::cargo_bin("tuftool")
+        .unwrap()
+        .args(&[
+            "update",
+            "-o",
+            update_out.path().to_str().unwrap(),
+            "-k",
+            root_key.to_str().unwrap(),
+            "--root",
+            root_json.to_str().unwrap(),
+            "--metadata-url",
+            updated_metadata_base_url,
+            "--role",
+            "A",
+            "-i",
+            dir_url(&add_b_out.path().join("metadata")).as_str(),
+            "changes",
+        ])
+        .output()
+        .unwrap();
+    println!("{:?}", changes);
     // Update the repo we just created
     Command::cargo_bin("tuftool")
         .unwrap()
@@ -450,6 +472,44 @@ fn update_target_command() {
     let new_targets_expiration = Utc::now().checked_add_signed(Duration::days(6)).unwrap();
     let new_targets_version: u64 = 170;
     let update_out = TempDir::new().unwrap();
+
+    // Print the changes to the updates repo
+    let changes = Command::cargo_bin("tuftool")
+        .unwrap()
+        .args(&[
+            "update",
+            "-o",
+            update_out.path().to_str().unwrap(),
+            "-k",
+            root_key.to_str().unwrap(),
+            "--root",
+            root_json.to_str().unwrap(),
+            "--metadata-url",
+            updated_metadata_base_url,
+            "--targets-expires",
+            new_targets_expiration.to_rfc3339().as_str(),
+            "--targets-version",
+            format!("{}", new_targets_version).as_str(),
+            "--snapshot-expires",
+            new_snapshot_expiration.to_rfc3339().as_str(),
+            "--snapshot-version",
+            format!("{}", new_snapshot_version).as_str(),
+            "--timestamp-expires",
+            new_timestamp_expiration.to_rfc3339().as_str(),
+            "--timestamp-version",
+            format!("{}", new_timestamp_version).as_str(),
+            "--role",
+            "A",
+            "-i",
+            &meta_out_url,
+            "-t",
+            targets_out_url.to_str().unwrap(),
+            "-f",
+            "changes",
+        ])
+        .output()
+        .unwrap();
+    println!("{:?}", changes);
 
     // Update the repo we just created
     Command::cargo_bin("tuftool")

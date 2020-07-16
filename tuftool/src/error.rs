@@ -67,9 +67,18 @@ pub(crate) enum Error {
         backtrace: Backtrace,
     },
 
+    #[snafu(display("Couldn't find {}", role))]
+    DelegateNotFound { role: String },
+
     #[snafu(display("Invalid delegation structure"))]
     DelegationStructure {
         source: tough::error::Error,
+        backtrace: Backtrace,
+    },
+
+    #[snafu(display("Invalid delegation structure"))]
+    DelegationsStructure {
+        source: tough::schema::error::Error,
         backtrace: Backtrace,
     },
 
