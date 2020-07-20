@@ -14,26 +14,32 @@ use tempfile::tempdir;
 use tough::editor::RepositoryEditor;
 use tough::http::HttpTransport;
 use tough::key_source::KeySource;
+use tough::schema::decoded::{Decoded, Hex};
 use tough::{ExpirationEnforcement, FilesystemTransport, Limits, Repository};
 use url::Url;
 
 #[derive(Debug, StructOpt)]
-pub(crate) struct AddKeyArgs {
+pub(crate) struct RemoveKeyArgs {
 
     /// Key files to sign with
     #[structopt(short = "k", long = "key", required = true, parse(try_from_str = parse_key_source))]
     keys: Vec<Box<dyn KeySource>>,
 
-    /// New keys to be used for role
-    #[structopt(long = "new-key", required = true, parse(try_from_str = parse_key_source))]
-    new_keys: Vec<Box<dyn KeySource>>,
+    /// Role to remove the key ID from (if provided, the public key will still be listed in the
+    /// file)
+    #[structopt(long = "delegatee")]
+    delegatee: Option<String>,
+
+    /// The key ID to remove
+    #[structopt(long = "keyid")]
+    keyid: Decoded<Hex>,
 
     /// Expiration of new role file; can be in full RFC 3339 format, or something like 'in
     /// 7 days'
     #[structopt(short = "e", long = "expires", required = true, parse(try_from_str = parse_datetime))]
     expires: DateTime<Utc>,
 
-    /// Version of role file
+    /// Version of targets.json file
     #[structopt(short = "v", long = "version")]
     version: Option<NonZeroU64>,
 
@@ -45,12 +51,20 @@ pub(crate) struct AddKeyArgs {
     #[structopt(short = "m", long = "metadata-url")]
     metadata_base_url: Url,
 
+    /// Threshold of signatures to sign delegatee
+    #[structopt(short = "t", long = "threshold")]
+    threshold: Option<NonZeroU64>,
+
     /// The directory where the repository will be written
     #[structopt(short = "o", long = "outdir")]
     outdir: PathBuf,
+
+    /// Determins if entire repo should be signed
+    #[structopt(long = "sign-all")]
+    sign_all: bool,
 }
 
-impl AddKeyArgs {
+impl RemoveKeyArgs {
     pub(crate) fn run(&self, role: &str) -> Result<()> {
         // load the repo
         let datastore = tempdir().context(error::TempDir)?;
@@ -79,10 +93,21 @@ impl AddKeyArgs {
         }
         .context(error::EditorFromRepo { path: &self.root })?;
 
-        // add keys to `role`
+        // remove keys from `role`
         editor
-            .add_key_to_delegatee(role, &self.new_keys)
-            .context(error::AddKey)?;
+            .remove_key(role, &self.keyid, &self.delegatee, &self.threshold)
+            .context(error::RemoveKey)?;
+
+        // if sign-all is included sign and write entire repo
+        if self.sign_all {
+            let signed_repo = editor.sign(&self.keys).context(error::SignRepo)?;
+            let metadata_dir = &self.outdir.join("metadata");
+            signed_repo.write(metadata_dir).context(error::WriteRepo {
+                directory: metadata_dir,
+            })?;
+
+            return Ok(());
+        }
 
         // sign the role
         let new_role = editor

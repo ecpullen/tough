@@ -18,6 +18,7 @@ mod create_role;
 mod datetime;
 mod download;
 mod error;
+mod remove_key_role;
 mod root;
 mod source;
 mod update;
@@ -195,6 +196,8 @@ enum DelegationCommand {
     Update(Box<update_targets::UpdateTargetsArgs>),
     /// Add a key to a delegatee
     AddKey(Box<add_key_role::AddKeyArgs>),
+    /// Add a key to a delegatee
+    RemoveKey(Box<remove_key_role::RemoveKeyArgs>),
 }
 
 impl DelegationCommand {
@@ -204,6 +207,7 @@ impl DelegationCommand {
             DelegationCommand::Add(args) => args.run(&role),
             DelegationCommand::Update(args) => args.run(&role),
             DelegationCommand::AddKey(args) => args.run(&role),
+            DelegationCommand::RemoveKey(args) => args.run(&role),
         }
     }
 }

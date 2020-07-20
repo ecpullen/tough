@@ -550,6 +550,49 @@ impl RepositoryEditor {
         Ok(())
     }
 
+    /// Removes the key with `keyid` from `role`, if `delegatee` is provided key is only removed for delegatee
+    pub fn remove_key(
+        &mut self,
+        role: &str,
+        keyid: &Decoded<Hex>,
+        delegatee: &Option<String>,
+        threshold: &Option<NonZeroU64>,
+    ) -> Result<()> {
+        let targets = self
+            .targets_struct
+            .as_mut()
+            .ok_or_else(|| error::Error::NoTargets)?;
+        if let Some(delegatee) = delegatee {
+            let delegated_role =
+                targets
+                    .delegated_role_mut(&delegatee)
+                    .context(error::DelegateMissing {
+                        name: delegatee.to_string(),
+                    })?;
+            delegated_role.keyids.retain(|key| *key != *keyid);
+            if let Some(threshold) = threshold {
+                delegated_role.threshold = *threshold;
+            }
+        }
+        let delegations = if role == "targets" {
+            targets
+                .delegations
+                .as_mut()
+                .ok_or_else(|| error::Error::NoDelegations)?
+        } else {
+            targets
+                .targets_by_name(role)
+                .context(error::DelegateMissing {
+                    name: role.to_string(),
+                })?
+                .delegations
+                .as_mut()
+                .ok_or_else(|| error::Error::NoDelegations)?
+        };
+        delegations.keys.remove(keyid);
+        Ok(())
+    }
+
     /// Set the `Snapshot` version
     pub fn snapshot_version(&mut self, snapshot_version: NonZeroU64) -> &mut Self {
         self.snapshot_version = Some(snapshot_version);
