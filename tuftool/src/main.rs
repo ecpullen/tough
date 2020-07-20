@@ -11,6 +11,7 @@
     clippy::used_underscore_binding,
 )]
 
+mod add_key_role;
 mod add_role;
 mod create;
 mod create_role;
@@ -192,6 +193,8 @@ enum DelegationCommand {
     Add(Box<add_role::AddRoleArgs>),
     /// Update Delegated targets
     Update(Box<update_targets::UpdateTargetsArgs>),
+    /// Add a key to a delegatee
+    AddKey(Box<add_key_role::AddKeyArgs>),
 }
 
 impl DelegationCommand {
@@ -200,6 +203,7 @@ impl DelegationCommand {
             DelegationCommand::Create(args) => args.run(&role),
             DelegationCommand::Add(args) => args.run(&role),
             DelegationCommand::Update(args) => args.run(&role),
+            DelegationCommand::AddKey(args) => args.run(&role),
         }
     }
 }

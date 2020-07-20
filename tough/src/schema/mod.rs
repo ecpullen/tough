@@ -481,6 +481,14 @@ impl Targets {
             .delegated_role(name)
     }
 
+    /// Given the name of a delegated role, return the delegated role
+    pub fn delegated_role_mut(&mut self, name: &str) -> Result<&mut DelegatedRole> {
+        self.delegations
+            .as_mut()
+            .ok_or_else(|| error::Error::NoDelegations)?
+            .delegated_role_mut(name)
+    }
+
     /// Returns an iterator of all targets delegated recursively
     pub fn targets_iter<'a>(&'a self) -> impl Iterator + 'a {
         self.targets_vec().into_iter()
@@ -894,6 +902,25 @@ impl Delegations {
                 match targets.signed.delegated_role(name) {
                     Ok(delegations) => return Ok(delegations),
                     Err(_) => continue,
+                }
+            } else {
+                return Err(Error::NoDelegations {});
+            }
+        }
+        Err(Error::TargetNotFound {
+            target_file: name.to_string(),
+        })
+    }
+
+    /// Given a role name recursively searches for the delegated role
+    pub fn delegated_role_mut(&mut self, name: &str) -> Result<&mut DelegatedRole> {
+        for delegated_role in &mut self.roles {
+            if delegated_role.name == name {
+                return Ok(delegated_role);
+            }
+            if let Some(targets) = &mut delegated_role.targets {
+                if let Ok(delegated_role) = targets.signed.delegated_role_mut(name) {
+                    return Ok(delegated_role);
                 }
             } else {
                 return Err(Error::NoDelegations {});

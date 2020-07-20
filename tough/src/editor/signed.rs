@@ -143,10 +143,15 @@ where
             // Ensure the keys we have available to us will allow us
             // to sign this role. The role's key ids must match up with one of
             // the keys provided.
-            let role = if let Some((signing_key_id, signing_key)) = root_keys
+            let role = if root_keys
                 .iter()
-                .find(|(keyid, _signing_key)| role_keys.keyids.contains(&keyid))
+                .filter(|(keyid, _signing_key)| role_keys.keyids.contains(&keyid))
+                .count()
+                > 0
             {
+                let valid_keys = root_keys
+                    .iter()
+                    .filter(|(keyid, _signing_key)| role_keys.keyids.contains(&keyid));
                 // Create the `Signed` struct for this role. This struct will be
                 // mutated later to contain the signatures.
                 let mut role = Signed {
@@ -161,13 +166,15 @@ where
                     .context(error::SerializeRole {
                         role: T::TYPE.to_string(),
                     })?;
-                let sig = signing_key.sign(&data, rng)?;
+                for (signing_key_id, signing_key) in valid_keys {
+                    let sig = signing_key.sign(&data, rng)?;
 
-                // Add the signatures to the `Signed` struct for this role
-                role.signatures.push(Signature {
-                    keyid: signing_key_id.clone(),
-                    sig: sig.into(),
-                });
+                    // Add the signatures to the `Signed` struct for this role
+                    role.signatures.push(Signature {
+                        keyid: signing_key_id.clone(),
+                        sig: sig.into(),
+                    });
+                }
 
                 role
             } else if include_all {

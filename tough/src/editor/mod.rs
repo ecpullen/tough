@@ -484,6 +484,72 @@ impl RepositoryEditor {
         Ok(key_id)
     }
 
+    /// Adds key to delegatees keyids to be used with `Repository::load_add_delegated_role()`
+    pub fn add_key_to_delegatee(
+        &mut self,
+        name: &str,
+        key_source: &[Box<dyn KeySource>],
+    ) -> Result<()> {
+        let parent = self
+            .targets_struct
+            .as_mut()
+            .ok_or_else(|| error::Error::NoTargets)?
+            .parent_of(name)
+            .context(error::DelegateMissing {
+                name: name.to_string(),
+            })?;
+        let mut keyids = Vec::new();
+        let mut key_pairs = HashMap::new();
+        for source in key_source {
+            let key_pair = source
+                .as_sign()
+                .context(error::KeyPairFromKeySource)?
+                .tuf_key();
+            let key_id = if let Some((key_id, _)) = parent
+                .keys
+                .iter()
+                .find(|(_, candidate_key)| key_pair.clone().eq(candidate_key))
+            {
+                key_id.clone()
+            } else {
+                // Key isn't present yet, so we need to add it
+                let key_id = key_pair
+                    .clone()
+                    .key_id()
+                    .context(error::JsonSerialization {})?;
+                key_id
+            };
+            key_pairs.insert(key_id.clone(), key_pair);
+            keyids.push(key_id);
+        }
+        let targets = self
+            .targets_struct
+            .as_mut()
+            .ok_or_else(|| error::Error::NoTargets)?
+            .targets_by_name(name)
+            .context(error::DelegateMissing {
+                name: name.to_string(),
+            })?;
+
+        let delegations = targets
+            .delegations
+            .as_mut()
+            .ok_or_else(|| error::Error::NoDelegations)?;
+        delegations.keys.extend(key_pairs);
+
+        self.targets_struct
+            .as_mut()
+            .ok_or_else(|| error::Error::NoTargets)?
+            .delegated_role_mut(name)
+            .context(error::DelegateMissing {
+                name: name.to_string(),
+            })?
+            .keyids
+            .extend(keyids);
+
+        Ok(())
+    }
+
     /// Set the `Snapshot` version
     pub fn snapshot_version(&mut self, snapshot_version: NonZeroU64) -> &mut Self {
         self.snapshot_version = Some(snapshot_version);

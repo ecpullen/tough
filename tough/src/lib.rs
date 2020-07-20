@@ -454,17 +454,8 @@ impl<'a, T: Transport> Repository<'a, T> {
         Ok(())
     }
 
-    /// Verifies incoming metadata and adds new metadata to repo
-    pub fn load_add_delegated_role(
-        &mut self,
-        name: &str,
-        delegator: &str,
-        paths: PathSet,
-        threshold: NonZeroU64,
-        metadata_base_url: &str,
-        version: Option<NonZeroU64>,
-    ) -> Result<()> {
-        // If we are delegating from targets all paths are valid
+    /// Verify that delegator has permission to delegate `paths`
+    fn verify_paths(&self, delegator: &str, paths: &PathSet) -> Result<()> {
         if delegator != "targets" {
             let parent_delegated_role =
                 self.targets
@@ -481,6 +472,21 @@ impl<'a, T: Transport> Repository<'a, T> {
                     paths: paths.vec().to_vec(),
                 })?;
         }
+        Ok(())
+    }
+
+    /// Verifies incoming metadata and adds new metadata to repo or overwrite as role as if metadata is new
+    pub fn load_add_delegated_role(
+        &mut self,
+        name: &str,
+        delegator: &str,
+        paths: PathSet,
+        threshold: NonZeroU64,
+        metadata_base_url: &str,
+        version: Option<NonZeroU64>,
+    ) -> Result<()> {
+        // If we are delegating from targets all paths are valid
+        self.verify_paths(delegator, &paths)?;
         let metadata_base_url = parse_url(metadata_base_url)?;
         // path to new role
         let role_url =
@@ -549,16 +555,34 @@ impl<'a, T: Transport> Repository<'a, T> {
                 .keys
                 .clone(),
         );
-        // Add the role
-        delegations.roles.push(DelegatedRole {
-            name: name.to_string(),
-            keyids: keys,
-            threshold,
-            paths,
-            terminating: false,
-            targets: Some(role),
-        });
+        let mut keyids = Vec::new();
+        for key in role
+            .signed
+            .delegations
+            .as_ref()
+            .context(error::NoDelegations {})?
+            .keys
+            .keys()
+        {
+            keyids.push(key.clone());
+        }
 
+        // If the role already exists we need to use update_targets
+        if let Some(pos) = delegations.roles.iter().position(|role| role.name == name) {
+            let old_role = &mut delegations.roles[pos];
+            old_role.update_targets(role);
+            old_role.keyids.extend(keyids);
+        } else {
+            // Add the role
+            delegations.roles.push(DelegatedRole {
+                name: name.to_string(),
+                keyids,
+                threshold,
+                paths,
+                terminating: false,
+                targets: Some(role),
+            });
+        }
         Ok(())
     }
 }
