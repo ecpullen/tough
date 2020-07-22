@@ -593,6 +593,58 @@ impl RepositoryEditor {
         Ok(())
     }
 
+    /// Removes `delegatee` from `from`'s delegatedroles,
+    /// if `recursive` and `delegatee` is not an immediate delegate,
+    /// removes the role that eventually delegates `delegatee`
+    pub fn remove_role(&mut self, delegatee: &str, from: &str, recursive: bool) -> Result<()> {
+        let targets = self
+            .targets_struct
+            .as_mut()
+            .ok_or_else(|| error::Error::NoTargets)?;
+        // Find the parent targets for the role we are creating
+        let parent = if from == "targets" {
+            targets
+        } else {
+            targets
+                .targets_by_name(from)
+                .context(error::DelegateMissing { name: from })?
+        }
+        .delegations
+        .as_mut()
+        .ok_or_else(|| error::Error::NoDelegations)?;
+        let num_roles = parent.roles.len();
+        parent.roles.retain(|role| role.name != delegatee);
+        if num_roles > parent.roles.len() {
+            Ok(())
+        } else if recursive {
+            let mut remove = None;
+            for role in &parent.roles {
+                if role
+                    .targets
+                    .as_ref()
+                    .ok_or_else(|| error::Error::NoTargets)?
+                    .signed
+                    .delegated_role(delegatee)
+                    .is_ok()
+                {
+                    remove = Some(role.name.clone());
+                }
+            }
+            if let Some(remove) = remove {
+                parent.roles.retain(|role| role.name != remove);
+                Ok(())
+            } else {
+                Err(error::Error::DelegateNotFound {
+                    name: delegatee.to_string(),
+                })
+            }
+        } else {
+            Err(error::Error::DelegateNotFound {
+                name: delegatee.to_string(),
+            })
+        }
+    }
+
     /// Set the `Snapshot` version
     pub fn snapshot_version(&mut self, snapshot_version: NonZeroU64) -> &mut Self {
         self.snapshot_version = Some(snapshot_version);

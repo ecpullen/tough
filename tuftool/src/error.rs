@@ -225,6 +225,14 @@ pub(crate) enum Error {
         backtrace: Backtrace,
     },
 
+    #[snafu(display("Failed to remove {} from {}: {}", role, from, source))]
+    RemoveRole {
+        source: tough::error::Error,
+        backtrace: Backtrace,
+        role: String,
+        from: String,
+    },
+
     #[snafu(display("Failed to load repository: {}", source))]
     RepoLoad {
         source: tough::error::Error,

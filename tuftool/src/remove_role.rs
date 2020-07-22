@@ -1,10 +1,8 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use crate::datetime::parse_datetime;
 use crate::error::{self, Result};
 use crate::source::parse_key_source;
-use chrono::{DateTime, Utc};
 use snafu::ResultExt;
 use std::fs::File;
 use std::num::NonZeroU64;
@@ -18,21 +16,16 @@ use tough::{ExpirationEnforcement, FilesystemTransport, Limits, Repository};
 use url::Url;
 
 #[derive(Debug, StructOpt)]
-pub(crate) struct AddKeyArgs {
+pub(crate) struct RemoveRoleArgs {
     /// Key files to sign with
     #[structopt(short = "k", long = "key", required = true, parse(try_from_str = parse_key_source))]
     keys: Vec<Box<dyn KeySource>>,
 
-    /// New keys to be used for role
-    #[structopt(long = "new-key", required = true, parse(try_from_str = parse_key_source))]
-    new_keys: Vec<Box<dyn KeySource>>,
+    /// Role to remove
+    #[structopt(long = "delegatee")]
+    delegatee: String,
 
-    /// Expiration of new role file; can be in full RFC 3339 format, or something like 'in
-    /// 7 days'
-    #[structopt(short = "e", long = "expires", required = true, parse(try_from_str = parse_datetime))]
-    expires: DateTime<Utc>,
-
-    /// Version of role file
+    /// Version of targets.json file
     #[structopt(short = "v", long = "version")]
     version: Option<NonZeroU64>,
 
@@ -44,12 +37,24 @@ pub(crate) struct AddKeyArgs {
     #[structopt(short = "m", long = "metadata-url")]
     metadata_base_url: Url,
 
+    /// Threshold of signatures to sign delegatee
+    #[structopt(short = "t", long = "threshold")]
+    threshold: Option<NonZeroU64>,
+
     /// The directory where the repository will be written
     #[structopt(short = "o", long = "outdir")]
     outdir: PathBuf,
+
+    /// Determine if the role should be removed even if it's not a direct delegatee
+    #[structopt(long = "recursive")]
+    recursive: bool,
+
+    /// Determins if entire repo should be signed
+    #[structopt(long = "sign-all")]
+    sign_all: bool,
 }
 
-impl AddKeyArgs {
+impl RemoveRoleArgs {
     pub(crate) fn run(&self, role: &str) -> Result<()> {
         // load the repo
         let datastore = tempdir().context(error::TempDir)?;
@@ -78,10 +83,24 @@ impl AddKeyArgs {
         }
         .context(error::EditorFromRepo { path: &self.root })?;
 
-        // add keys to `role`
+        // remove `delegatee`
         editor
-            .add_key_to_delegatee(role, &self.new_keys)
-            .context(error::AddKey)?;
+            .remove_role(&self.delegatee, role, self.recursive)
+            .context(error::RemoveRole {
+                role: self.delegatee.clone(),
+                from: role,
+            })?;
+
+        // if sign-all is included sign and write entire repo
+        if self.sign_all {
+            let signed_repo = editor.sign(&self.keys).context(error::SignRepo)?;
+            let metadata_dir = &self.outdir.join("metadata");
+            signed_repo.write(metadata_dir).context(error::WriteRepo {
+                directory: metadata_dir,
+            })?;
+
+            return Ok(());
+        }
 
         // sign the role
         let new_role = editor

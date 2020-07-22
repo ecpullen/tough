@@ -20,7 +20,6 @@ use url::Url;
 
 #[derive(Debug, StructOpt)]
 pub(crate) struct RemoveKeyArgs {
-
     /// Key files to sign with
     #[structopt(short = "k", long = "key", required = true, parse(try_from_str = parse_key_source))]
     keys: Vec<Box<dyn KeySource>>,
@@ -36,8 +35,8 @@ pub(crate) struct RemoveKeyArgs {
 
     /// Expiration of new role file; can be in full RFC 3339 format, or something like 'in
     /// 7 days'
-    #[structopt(short = "e", long = "expires", required = true, parse(try_from_str = parse_datetime))]
-    expires: DateTime<Utc>,
+    #[structopt(short = "e", long = "expires", parse(try_from_str = parse_datetime))]
+    expires: Option<DateTime<Utc>>,
 
     /// Version of targets.json file
     #[structopt(short = "v", long = "version")]
@@ -122,7 +121,8 @@ impl RemoveKeyArgs {
 
         // write the role to outdir
         let metadata_destination_out = &self.outdir.join("metadata");
-        new_role.write_del_role(&metadata_destination_out, false, role)
+        new_role
+            .write_del_role(&metadata_destination_out, false, role)
             .context(error::WriteRoles {
                 roles: [role.to_string()].to_vec(),
             })?;
