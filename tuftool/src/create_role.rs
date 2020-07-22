@@ -20,10 +20,6 @@ use url::Url;
 
 #[derive(Debug, StructOpt)]
 pub(crate) struct CreateRoleArgs {
-    /// Delegatee role
-    #[structopt(long = "role", required = true)]
-    role: String,
-
     /// Delegating role
     #[structopt(long = "from")]
     from: Option<String>,
@@ -59,7 +55,7 @@ pub(crate) struct CreateRoleArgs {
 }
 
 impl CreateRoleArgs {
-    pub(crate) fn run(&self) -> Result<()> {
+    pub(crate) fn run(&self, role: &str) -> Result<()> {
         // load the repo
         let datastore = tempdir().context(error::TempDir)?;
         // We don't do anything with targets so we will use metadata url
@@ -93,7 +89,7 @@ impl CreateRoleArgs {
         editor
             .add_delegate(
                 &delegator,
-                self.role.clone(),
+                role.to_string(),
                 Some(&self.keys),
                 PathSet::Paths(Vec::new()),
                 self.expires,
@@ -102,26 +98,25 @@ impl CreateRoleArgs {
                     .as_ref()
                     .unwrap_or(&NonZeroU64::new(1).unwrap()),
             )
-            .context(error::DelegateeNotFound {
-                role: self.role.clone(),
-            })?;
+            .context(error::DelegateeNotFound { role: role.clone() })?;
 
         // sign the role
-        let role = editor
-            .sign_roles(&self.keys, [self.role.as_str()].to_vec())
+        let new_role = editor
+            .sign_roles(&self.keys, [role].to_vec())
             .context(error::SignRoles {
-                roles: [self.role.clone()].to_vec(),
+                roles: [role.to_string()].to_vec(),
             })?
-            .remove(&self.role)
+            .remove(role)
             .ok_or_else(|| error::Error::SignRolesRemove {
-                roles: [self.role.clone()].to_vec(),
+                roles: [role.to_string()].to_vec(),
             })?;
 
         // write the role to outdir
         let metadata_destination_out = &self.outdir.join("metadata");
-        role.write_del_role(&metadata_destination_out, false, &self.role)
+        new_role
+            .write_del_role(&metadata_destination_out, false, &role)
             .context(error::WriteRoles {
-                roles: [self.role.clone()].to_vec(),
+                roles: [role.to_string()].to_vec(),
             })?;
 
         Ok(())

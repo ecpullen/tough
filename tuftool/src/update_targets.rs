@@ -20,10 +20,6 @@ use url::Url;
 
 #[derive(Debug, StructOpt)]
 pub(crate) struct UpdateTargetsArgs {
-    /// Delegatee role
-    #[structopt(long = "role", required = true)]
-    role: String,
-
     /// Key files to sign with
     #[structopt(short = "k", long = "key", required = true, parse(try_from_str = parse_key_source))]
     keys: Vec<Box<dyn KeySource>>,
@@ -67,7 +63,7 @@ pub(crate) struct UpdateTargetsArgs {
 }
 
 impl UpdateTargetsArgs {
-    pub(crate) fn run(&self) -> Result<()> {
+    pub(crate) fn run(&self, role: &str) -> Result<()> {
         // load the repo
         let datastore = tempdir().context(error::TempDir)?;
         let settings = tough::Settings {
@@ -100,10 +96,8 @@ impl UpdateTargetsArgs {
 
         for (filename, target) in new_targets {
             editor
-                .add_target_to_delegatee(&filename, target, &self.role)
-                .context(error::DelegateeNotFound {
-                    role: self.role.clone(),
-                })?;
+                .add_target_to_delegatee(&filename, target, &role)
+                .context(error::DelegateeNotFound { role: role.clone() })?;
         }
 
         // if sign_all is requested, sign and write entire repo
@@ -118,22 +112,23 @@ impl UpdateTargetsArgs {
         }
         // if not, write updated role to outdir/metadata
         // sign the updated role and receive SignedRole for the new role
-        let mut roles = editor
-            .sign_roles(&self.keys, [self.role.as_str()].to_vec())
-            .context(error::SignRoles {
-                roles: [self.role.clone()].to_vec(),
-            })?;
+        let mut roles =
+            editor
+                .sign_roles(&self.keys, [role].to_vec())
+                .context(error::SignRoles {
+                    roles: [role.to_string()].to_vec(),
+                })?;
 
         let metadata_destination_out = &self.outdir.join("metadata");
         // write the delegator role to outdir
         roles
-            .remove(&self.role)
+            .remove(role)
             .ok_or_else(|| error::Error::SignRolesRemove {
-                roles: [self.role.clone()].to_vec(),
+                roles: [role.to_string()].to_vec(),
             })?
-            .write_del_role(&metadata_destination_out, false, &self.role)
+            .write_del_role(&metadata_destination_out, false, &role)
             .context(error::WriteRoles {
-                roles: [self.role.clone()].to_vec(),
+                roles: [role.to_string()].to_vec(),
             })?;
 
         let targets_destination_out = &self.outdir.join("targets");

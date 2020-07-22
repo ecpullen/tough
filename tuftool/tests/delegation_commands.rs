@@ -77,7 +77,10 @@ fn create_add_role_command() {
     Command::cargo_bin("tuftool")
         .unwrap()
         .args(&[
-            "create-role",
+            "delegation",
+            "--role",
+            "A",
+            "create",
             "-o",
             meta_out.path().to_str().unwrap(),
             "-k",
@@ -88,8 +91,6 @@ fn create_add_role_command() {
             metadata_base_url,
             "-e",
             expiration.to_rfc3339().as_str(),
-            "--role",
-            "A",
             "--from",
             "targets",
         ])
@@ -101,7 +102,10 @@ fn create_add_role_command() {
     Command::cargo_bin("tuftool")
         .unwrap()
         .args(&[
-            "add-role",
+            "delegation",
+            "--role",
+            "targets",
+            "add",
             "-o",
             new_repo_dir.path().to_str().unwrap(),
             "-i",
@@ -114,8 +118,6 @@ fn create_add_role_command() {
             metadata_base_url,
             "-e",
             expiration.to_rfc3339().as_str(),
-            "--role",
-            "targets",
             "--delegatee",
             "A",
             "--sign-all",
@@ -147,7 +149,10 @@ fn create_add_role_command() {
     Command::cargo_bin("tuftool")
         .unwrap()
         .args(&[
-            "create-role",
+            "delegation",
+            "--role",
+            "B",
+            "create",
             "-o",
             create_out.path().to_str().unwrap(),
             "-k",
@@ -158,8 +163,6 @@ fn create_add_role_command() {
             updated_metadata_base_url,
             "-e",
             expiration.to_rfc3339().as_str(),
-            "--role",
-            "B",
             "--from",
             "A",
         ])
@@ -171,7 +174,10 @@ fn create_add_role_command() {
     Command::cargo_bin("tuftool")
         .unwrap()
         .args(&[
-            "add-role",
+            "delegation",
+            "--role",
+            "A",
+            "add",
             "-o",
             add_b_out.path().to_str().unwrap(),
             "-i",
@@ -184,8 +190,6 @@ fn create_add_role_command() {
             updated_metadata_base_url,
             "-e",
             expiration.to_rfc3339().as_str(),
-            "--role",
-            "A",
             "--delegatee",
             "B",
         ])
@@ -276,7 +280,10 @@ fn update_target_command_invalid_target() {
     Command::cargo_bin("tuftool")
         .unwrap()
         .args(&[
-            "create-role",
+            "delegation",
+            "--role",
+            "A",
+            "create",
             "-o",
             meta_out.path().to_str().unwrap(),
             "-k",
@@ -287,8 +294,6 @@ fn update_target_command_invalid_target() {
             metadata_base_url,
             "-e",
             expiration.to_rfc3339().as_str(),
-            "--role",
-            "A",
             "--from",
             "targets",
         ])
@@ -300,7 +305,10 @@ fn update_target_command_invalid_target() {
     Command::cargo_bin("tuftool")
         .unwrap()
         .args(&[
-            "add-role",
+            "delegation",
+            "--role",
+            "targets",
+            "add",
             "-o",
             new_repo_dir.path().to_str().unwrap(),
             "-i",
@@ -313,8 +321,6 @@ fn update_target_command_invalid_target() {
             metadata_base_url,
             "-e",
             expiration.to_rfc3339().as_str(),
-            "--role",
-            "targets",
             "--delegatee",
             "A",
             "--sign-all",
@@ -329,7 +335,10 @@ fn update_target_command_invalid_target() {
     Command::cargo_bin("tuftool")
         .unwrap()
         .args(&[
-            "update-delegated-targets",
+            "delegation",
+            "--role",
+            "A",
+            "update",
             "-o",
             ut_out.path().to_str().unwrap(),
             "-k",
@@ -338,8 +347,6 @@ fn update_target_command_invalid_target() {
             root_json.to_str().unwrap(),
             "--metadata-url",
             updated_metadata_base_url,
-            "--role",
-            "A",
             "-t",
             targets_input_dir.to_str().unwrap(),
         ])
@@ -367,7 +374,10 @@ fn update_target_command() {
     Command::cargo_bin("tuftool")
         .unwrap()
         .args(&[
-            "create-role",
+            "delegation",
+            "--role",
+            "A",
+            "create",
             "-o",
             meta_out.path().to_str().unwrap(),
             "-k",
@@ -378,8 +388,6 @@ fn update_target_command() {
             metadata_base_url,
             "-e",
             expiration.to_rfc3339().as_str(),
-            "--role",
-            "A",
             "--from",
             "targets",
         ])
@@ -391,7 +399,10 @@ fn update_target_command() {
     Command::cargo_bin("tuftool")
         .unwrap()
         .args(&[
-            "add-role",
+            "delegation",
+            "--role",
+            "targets",
+            "add",
             "-o",
             new_repo_dir.path().to_str().unwrap(),
             "-i",
@@ -404,8 +415,6 @@ fn update_target_command() {
             metadata_base_url,
             "-e",
             expiration.to_rfc3339().as_str(),
-            "--role",
-            "targets",
             "--delegatee",
             "A",
             "--sign-all",
@@ -424,7 +433,10 @@ fn update_target_command() {
     Command::cargo_bin("tuftool")
         .unwrap()
         .args(&[
-            "update-delegated-targets",
+            "delegation",
+            "--role",
+            "A",
+            "update",
             "-o",
             ut_out.path().to_str().unwrap(),
             "-k",
@@ -433,8 +445,6 @@ fn update_target_command() {
             root_json.to_str().unwrap(),
             "--metadata-url",
             updated_metadata_base_url,
-            "--role",
-            "A",
             "-t",
             targets_input_dir.to_str().unwrap(),
         ])
@@ -544,7 +554,10 @@ fn create_add_role_command_invalid_path() {
     Command::cargo_bin("tuftool")
         .unwrap()
         .args(&[
-            "create-role",
+            "delegation",
+            "--role",
+            "A",
+            "create",
             "-o",
             meta_out.path().to_str().unwrap(),
             "-k",
@@ -555,8 +568,6 @@ fn create_add_role_command_invalid_path() {
             metadata_base_url,
             "-e",
             expiration.to_rfc3339().as_str(),
-            "--role",
-            "A",
             "--from",
             "targets",
         ])
@@ -568,7 +579,10 @@ fn create_add_role_command_invalid_path() {
     Command::cargo_bin("tuftool")
         .unwrap()
         .args(&[
-            "add-role",
+            "delegation",
+            "--role",
+            "targets",
+            "add",
             "-o",
             new_repo_dir.path().to_str().unwrap(),
             "-i",
@@ -581,8 +595,6 @@ fn create_add_role_command_invalid_path() {
             metadata_base_url,
             "-e",
             expiration.to_rfc3339().as_str(),
-            "--role",
-            "targets",
             "--delegatee",
             "A",
             "--sign-all",
@@ -614,7 +626,10 @@ fn create_add_role_command_invalid_path() {
     Command::cargo_bin("tuftool")
         .unwrap()
         .args(&[
-            "create-role",
+            "delegation",
+            "--role",
+            "B",
+            "create",
             "-o",
             create_out.path().to_str().unwrap(),
             "-k",
@@ -625,8 +640,6 @@ fn create_add_role_command_invalid_path() {
             updated_metadata_base_url,
             "-e",
             expiration.to_rfc3339().as_str(),
-            "--role",
-            "B",
             "--from",
             "A",
         ])
@@ -638,7 +651,10 @@ fn create_add_role_command_invalid_path() {
     Command::cargo_bin("tuftool")
         .unwrap()
         .args(&[
-            "add-role",
+            "delegation",
+            "--role",
+            "A",
+            "add",
             "-o",
             add_b_out.path().to_str().unwrap(),
             "-i",
@@ -651,8 +667,6 @@ fn create_add_role_command_invalid_path() {
             updated_metadata_base_url,
             "-e",
             expiration.to_rfc3339().as_str(),
-            "--role",
-            "A",
             "--delegatee",
             "B",
             "-p",

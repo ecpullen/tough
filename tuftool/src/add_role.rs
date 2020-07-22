@@ -20,10 +20,6 @@ use url::Url;
 
 #[derive(Debug, StructOpt)]
 pub(crate) struct AddRoleArgs {
-    /// Delegating role
-    #[structopt(long = "role", required = true)]
-    role: String,
-
     /// Delegatee role
     #[structopt(short = "d", long = "delegatee")]
     delegatee: String,
@@ -75,7 +71,7 @@ pub(crate) struct AddRoleArgs {
 }
 
 impl AddRoleArgs {
-    pub(crate) fn run(&self) -> Result<()> {
+    pub(crate) fn run(&self, role: &str) -> Result<()> {
         // load the repo
         let datastore = tempdir().context(error::TempDir)?;
         // We don't do anything with targets so we will use metadata url
@@ -107,7 +103,7 @@ impl AddRoleArgs {
             repository
                 .load_add_delegated_role(
                     &self.delegatee,
-                    &self.role,
+                    &role,
                     paths,
                     *self
                         .threshold
@@ -125,7 +121,7 @@ impl AddRoleArgs {
             repository
                 .load_add_delegated_role(
                     &self.delegatee,
-                    &self.role,
+                    &role,
                     paths,
                     *self
                         .threshold
@@ -152,24 +148,21 @@ impl AddRoleArgs {
         // if not, write new roles to outdir
         // sign the updated role and recieve SignedRole for the new role
         let mut roles = editor
-            .sign_roles(
-                &self.keys,
-                [self.role.as_str(), self.delegatee.as_str()].to_vec(),
-            )
+            .sign_roles(&self.keys, [role, self.delegatee.as_str()].to_vec())
             .context(error::SignRoles {
-                roles: [self.role.clone()].to_vec(),
+                roles: [role.to_string()].to_vec(),
             })?;
 
         let metadata_destination_out = &self.outdir.join("metadata");
         // write the delegator role to outdir
         roles
-            .remove(&self.role)
+            .remove(role)
             .ok_or_else(|| error::Error::SignRolesRemove {
-                roles: [self.role.clone()].to_vec(),
+                roles: [role.to_string()].to_vec(),
             })?
-            .write_del_role(&metadata_destination_out, false, &self.role)
+            .write_del_role(&metadata_destination_out, false, &role)
             .context(error::WriteRoles {
-                roles: [self.role.clone()].to_vec(),
+                roles: [role.to_string()].to_vec(),
             })?;
         // write delegatee metadata to outdir
         roles

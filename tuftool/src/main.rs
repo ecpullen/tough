@@ -77,12 +77,8 @@ enum Command {
     Update(Box<update::UpdateArgs>),
     /// Manipulate a root.json metadata file
     Root(root::Command),
-    /// Create delegated role
-    CreateRole(Box<create_role::CreateRoleArgs>),
-    /// Add delegated role
-    AddRole(Box<add_role::AddRoleArgs>),
-    /// Update Delegated targets
-    UpdateDelegatedTargets(Box<update_targets::UpdateTargetsArgs>),
+    /// Delegation Commands
+    Delegation(Delegation),
 }
 
 impl Command {
@@ -92,9 +88,7 @@ impl Command {
             Command::Root(root_subcommand) => root_subcommand.run(),
             Command::Download(args) => args.run(),
             Command::Update(args) => args.run(),
-            Command::CreateRole(args) => args.run(),
-            Command::AddRole(args) => args.run(),
-            Command::UpdateDelegatedTargets(args) => args.run(),
+            Command::Delegation(cmd) => cmd.run(),
         }
     }
 }
@@ -174,4 +168,38 @@ fn main() -> ! {
             1
         }
     })
+}
+
+#[derive(StructOpt, Debug)]
+struct Delegation {
+    #[structopt(long = "role", short = "r")]
+    role: String,
+
+    #[structopt(subcommand)]
+    cmd: DelegationCommand,
+}
+
+impl Delegation {
+    fn run(self) -> Result<()> {
+        self.cmd.run(&self.role)
+    }
+}
+
+#[derive(Debug, StructOpt)]
+enum DelegationCommand {
+    Create(Box<create_role::CreateRoleArgs>),
+    /// Add delegated role
+    Add(Box<add_role::AddRoleArgs>),
+    /// Update Delegated targets
+    Update(Box<update_targets::UpdateTargetsArgs>),
+}
+
+impl DelegationCommand {
+    fn run(self, role: &str) -> Result<()> {
+        match self {
+            DelegationCommand::Create(args) => args.run(&role),
+            DelegationCommand::Add(args) => args.run(&role),
+            DelegationCommand::Update(args) => args.run(&role),
+        }
+    }
 }
