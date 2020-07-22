@@ -683,6 +683,34 @@ impl RepositoryEditor {
         Ok(())
     }
 
+    /// Removes unnecessary keyids from `role`'s delegations field
+    pub fn prune_role(&mut self, role: &str) -> Result<()> {
+        let delegations = if role == "targets" {
+            self.targets_struct
+                .as_mut()
+                .ok_or_else(|| error::Error::NoTargets)?
+        } else {
+            self.targets_struct
+                .as_mut()
+                .ok_or_else(|| error::Error::NoTargets)?
+                .targets_by_name(role)
+                .context(error::DelegateMissing {
+                    name: role.to_string(),
+                })?
+        }
+        .delegations
+        .as_mut()
+        .ok_or_else(|| error::Error::NoDelegations)?;
+        let mut used_keys = Vec::new();
+        for role in &delegations.roles {
+            for key in &role.keyids {
+                used_keys.push(key.clone());
+            }
+        }
+        delegations.keys.retain(|k, _| used_keys.contains(k));
+        Ok(())
+    }
+
     /// Set the `Snapshot` version
     pub fn snapshot_version(&mut self, snapshot_version: NonZeroU64) -> &mut Self {
         self.snapshot_version = Some(snapshot_version);

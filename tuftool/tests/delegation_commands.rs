@@ -1618,3 +1618,189 @@ fn remove_role_recursive_command() {
     assert!(repo.delegated_role("A").is_none());
     assert!(repo.delegated_role("B").is_none());
 }
+
+#[test]
+// Ensure we can prune a role
+// Create A with 2 keys and remove both keys
+fn prune() {
+    let root_json = test_utils::test_data().join("simple-rsa").join("root.json");
+    let root_key = test_utils::test_data().join("snakeoil.pem");
+    let targets_key = test_utils::test_data().join("targetskey");
+    let targets_key1 = test_utils::test_data().join("targetskey-1");
+    let repo_dir = TempDir::new().unwrap();
+
+    // Create a repo using tuftool and the reference tuf implementation data
+    create_repo(repo_dir.path());
+
+    // Set new expiration date for the new role
+    let expiration = Utc::now().checked_add_signed(Duration::days(4)).unwrap();
+    let metadata_base_url = &test_utils::dir_url(repo_dir.path().join("metadata"));
+    let meta_out = TempDir::new().unwrap();
+
+    // create role A
+    Command::cargo_bin("tuftool")
+        .unwrap()
+        .args(&[
+            "delegation",
+            "--role",
+            "A",
+            "create",
+            "-o",
+            meta_out.path().to_str().unwrap(),
+            "-k",
+            targets_key.to_str().unwrap(),
+            "-k",
+            targets_key1.to_str().unwrap(),
+            "--root",
+            root_json.to_str().unwrap(),
+            "--metadata-url",
+            metadata_base_url,
+            "-e",
+            expiration.to_rfc3339().as_str(),
+            "--from",
+            "targets",
+        ])
+        .assert()
+        .success();
+
+    let new_repo_dir = TempDir::new().unwrap();
+    // add role to targets metadata and sign entire repo
+    Command::cargo_bin("tuftool")
+        .unwrap()
+        .args(&[
+            "delegation",
+            "--role",
+            "targets",
+            "add",
+            "-o",
+            new_repo_dir.path().to_str().unwrap(),
+            "-i",
+            dir_url(&meta_out.path().join("metadata")).as_str(),
+            "-k",
+            root_key.to_str().unwrap(),
+            "--root",
+            root_json.to_str().unwrap(),
+            "--metadata-url",
+            metadata_base_url,
+            "-e",
+            expiration.to_rfc3339().as_str(),
+            "--delegatee",
+            "A",
+            "--sign-all",
+        ])
+        .assert()
+        .success();
+
+    // Load the updated repo
+    let temp_datastore = TempDir::new().unwrap();
+    let updated_metadata_base_url = &test_utils::dir_url(new_repo_dir.path().join("metadata"));
+    let updated_targets_base_url = &test_utils::dir_url(new_repo_dir.path().join("targets"));
+    let repo = Repository::load(
+        &tough::FilesystemTransport,
+        Settings {
+            root: File::open(&root_json).unwrap(),
+            datastore: temp_datastore.as_ref(),
+            metadata_base_url: updated_metadata_base_url,
+            targets_base_url: updated_targets_base_url,
+            limits: Limits::default(),
+            expiration_enforcement: ExpirationEnforcement::Safe,
+        },
+    )
+    .unwrap();
+    // Make sure `A` is added as a role
+    assert!(repo.delegated_role("A").is_some());
+
+    let prune_out = TempDir::new().unwrap();
+    // prune role `A`
+    Command::cargo_bin("tuftool")
+        .unwrap()
+        .args(&[
+            "delegation",
+            "--role",
+            "A",
+            "prune",
+            "-o",
+            prune_out.path().to_str().unwrap(),
+            "-k",
+            targets_key1.to_str().unwrap(),
+            "--root",
+            root_json.to_str().unwrap(),
+            "--metadata-url",
+            updated_metadata_base_url,
+        ])
+        .assert()
+        .success();
+
+    // update repo with new metadata
+    // Set new expiration dates and version numbers for the update command
+    let new_timestamp_expiration = Utc::now().checked_add_signed(Duration::days(4)).unwrap();
+    let new_timestamp_version: u64 = 310;
+    let new_snapshot_expiration = Utc::now().checked_add_signed(Duration::days(5)).unwrap();
+    let new_snapshot_version: u64 = 250;
+    let new_targets_expiration = Utc::now().checked_add_signed(Duration::days(6)).unwrap();
+    let new_targets_version: u64 = 170;
+    let update_out = TempDir::new().unwrap();
+
+    // Update the repo we just created
+    Command::cargo_bin("tuftool")
+        .unwrap()
+        .args(&[
+            "update",
+            "-o",
+            update_out.path().to_str().unwrap(),
+            "-k",
+            root_key.to_str().unwrap(),
+            "--root",
+            root_json.to_str().unwrap(),
+            "--metadata-url",
+            updated_metadata_base_url,
+            "--targets-expires",
+            new_targets_expiration.to_rfc3339().as_str(),
+            "--targets-version",
+            format!("{}", new_targets_version).as_str(),
+            "--snapshot-expires",
+            new_snapshot_expiration.to_rfc3339().as_str(),
+            "--snapshot-version",
+            format!("{}", new_snapshot_version).as_str(),
+            "--timestamp-expires",
+            new_timestamp_expiration.to_rfc3339().as_str(),
+            "--timestamp-version",
+            format!("{}", new_timestamp_version).as_str(),
+            "--role",
+            "A",
+            "-i",
+            dir_url(&prune_out.path().join("metadata")).as_str(),
+        ])
+        .assert()
+        .success();
+
+    // Load the updated repo
+    let temp_datastore = TempDir::new().unwrap();
+    let updated_metadata_base_url = &test_utils::dir_url(update_out.path().join("metadata"));
+    let updated_targets_base_url = &test_utils::dir_url(update_out.path().join("targets"));
+    let repo = Repository::load(
+        &tough::FilesystemTransport,
+        Settings {
+            root: File::open(root_json).unwrap(),
+            datastore: temp_datastore.as_ref(),
+            metadata_base_url: updated_metadata_base_url,
+            targets_base_url: updated_targets_base_url,
+            limits: Limits::default(),
+            expiration_enforcement: ExpirationEnforcement::Safe,
+        },
+    )
+    .unwrap();
+    // Make sure that `A` has no keys
+    assert!(repo
+        .delegated_role("A")
+        .unwrap()
+        .targets
+        .as_ref()
+        .unwrap()
+        .signed
+        .delegations
+        .as_ref()
+        .unwrap()
+        .keys
+        .is_empty());
+}

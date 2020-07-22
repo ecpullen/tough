@@ -18,21 +18,17 @@ use tough::{ExpirationEnforcement, FilesystemTransport, Limits, Repository};
 use url::Url;
 
 #[derive(Debug, StructOpt)]
-pub(crate) struct RemoveRoleArgs {
+pub(crate) struct PruneRoleArgs {
     /// Key files to sign with
     #[structopt(short = "k", long = "key", required = true, parse(try_from_str = parse_key_source))]
     keys: Vec<Box<dyn KeySource>>,
-
-    /// Role to remove
-    #[structopt(long = "delegatee")]
-    delegatee: String,
 
     /// Expiration of new role file; can be in full RFC 3339 format, or something like 'in
     /// 7 days'
     #[structopt(short = "e", long = "expires", parse(try_from_str = parse_datetime))]
     expires: Option<DateTime<Utc>>,
 
-    /// Version of role
+    /// Updated version
     #[structopt(short = "v", long = "version")]
     version: Option<NonZeroU64>,
 
@@ -48,16 +44,12 @@ pub(crate) struct RemoveRoleArgs {
     #[structopt(short = "o", long = "outdir")]
     outdir: PathBuf,
 
-    /// Determine if the role should be removed even if it's not a direct delegatee
-    #[structopt(long = "recursive")]
-    recursive: bool,
-
     /// Determins if entire repo should be signed
     #[structopt(long = "sign-all")]
     sign_all: bool,
 }
 
-impl RemoveRoleArgs {
+impl PruneRoleArgs {
     pub(crate) fn run(&self, role: &str) -> Result<()> {
         // load the repo
         let datastore = tempdir().context(error::TempDir)?;
@@ -87,12 +79,9 @@ impl RemoveRoleArgs {
         .context(error::EditorFromRepo { path: &self.root })?;
 
         // remove `delegatee`
-        editor
-            .remove_role(&self.delegatee, role, self.recursive)
-            .context(error::RemoveRole {
-                role: self.delegatee.clone(),
-                from: role,
-            })?;
+        editor.prune_role(role).context(error::PruneRole {
+            role: role.to_string(),
+        })?;
 
         // update the role
         editor

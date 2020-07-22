@@ -219,6 +219,13 @@ pub(crate) enum Error {
     #[snafu(display("Path {} is not valid UTF-8", path.display()))]
     PathUtf8 { path: PathBuf, backtrace: Backtrace },
 
+    #[snafu(display("Failed to prune {}: {}", role, source))]
+    PruneRole {
+        role: String,
+        source: tough::error::Error,
+        backtrace: Backtrace,
+    },
+
     #[snafu(display("Failed to remove key: {}", source))]
     RemoveKey {
         source: tough::error::Error,
