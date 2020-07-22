@@ -29,8 +29,8 @@ pub(crate) struct AddKeyArgs {
 
     /// Expiration of new role file; can be in full RFC 3339 format, or something like 'in
     /// 7 days'
-    #[structopt(short = "e", long = "expires", required = true, parse(try_from_str = parse_datetime))]
-    expires: DateTime<Utc>,
+    #[structopt(short = "e", long = "expires", parse(try_from_str = parse_datetime))]
+    expires: Option<DateTime<Utc>>,
 
     /// Version of role file
     #[structopt(short = "v", long = "version")]
@@ -82,6 +82,11 @@ impl AddKeyArgs {
         editor
             .add_key_to_delegatee(role, &self.new_keys)
             .context(error::AddKey)?;
+
+        // update the role
+        editor
+            .update_role(role, self.expires, self.version)
+            .context(error::UpdateRole { role })?;
 
         // sign the role
         let new_role = editor

@@ -96,7 +96,7 @@ impl AddRoleArgs {
         // Loading a `Repository` with different `Transport`s results in
         // different types. This is why we can't assign the `Repository`
         // to a variable with the if statement.
-        let editor = if self.metadata_base_url.scheme() == "file" {
+        let mut editor = if self.metadata_base_url.scheme() == "file" {
             let mut repository =
                 Repository::load(&FilesystemTransport, settings).context(error::RepoLoad)?;
             // Add incoming role metadata
@@ -110,7 +110,6 @@ impl AddRoleArgs {
                         .as_ref()
                         .unwrap_or(&NonZeroU64::new(1).unwrap()),
                     self.indir.as_str(),
-                    self.version,
                 )
                 .context(error::LoadMetadata)?;
             RepositoryEditor::from_repo(&self.root, repository)
@@ -128,12 +127,16 @@ impl AddRoleArgs {
                         .as_ref()
                         .unwrap_or(&NonZeroU64::new(1).unwrap()),
                     self.indir.as_str(),
-                    self.version,
                 )
                 .context(error::LoadMetadata)?;
             RepositoryEditor::from_repo(&self.root, repository)
         }
         .context(error::EditorFromRepo { path: &self.root })?;
+
+        // update the role
+        editor
+            .update_role(role, self.expires, self.version)
+            .context(error::UpdateRole { role })?;
 
         // if sign-all is included sign and write entire repo
         if self.sign_all {

@@ -814,7 +814,6 @@ fn create_role_flow() {
             PathSet::Paths(["main/*".to_string()].to_vec()),
             NonZeroU64::new(1).unwrap(),
             metadata_base_url_out.as_str(),
-            None,
         )
         .unwrap();
     assert!(new_repo.delegated_role("A").is_some());
@@ -931,7 +930,6 @@ fn create_role_flow() {
             PathSet::Paths(["main/file?.txt".to_string()].to_vec()),
             NonZeroU64::new(1).unwrap(),
             metadata_base_url_out.as_str(),
-            None,
         )
         .unwrap();
     assert!(new_repo.delegated_role("B").is_some());
@@ -1131,7 +1129,6 @@ fn update_targets_flow() {
             PathSet::Paths(["*.txt".to_string()].to_vec()),
             NonZeroU64::new(1).unwrap(),
             metadata_base_url_out.as_str(),
-            None,
         )
         .unwrap();
     assert!(new_repo.delegated_role("A").is_some());
@@ -1248,7 +1245,6 @@ fn update_targets_flow() {
             PathSet::Paths(["file?.txt".to_string()].to_vec()),
             NonZeroU64::new(1).unwrap(),
             metadata_base_url_out.as_str(),
-            None,
         )
         .unwrap();
     assert!(new_repo.delegated_role("B").is_some());

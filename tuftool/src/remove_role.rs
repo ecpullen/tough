@@ -1,8 +1,10 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use crate::datetime::parse_datetime;
 use crate::error::{self, Result};
 use crate::source::parse_key_source;
+use chrono::{DateTime, Utc};
 use snafu::ResultExt;
 use std::fs::File;
 use std::num::NonZeroU64;
@@ -24,6 +26,11 @@ pub(crate) struct RemoveRoleArgs {
     /// Role to remove
     #[structopt(long = "delegatee")]
     delegatee: String,
+
+    /// Expiration of new role file; can be in full RFC 3339 format, or something like 'in
+    /// 7 days'
+    #[structopt(short = "e", long = "expires", parse(try_from_str = parse_datetime))]
+    expires: Option<DateTime<Utc>>,
 
     /// Version of targets.json file
     #[structopt(short = "v", long = "version")]
@@ -90,6 +97,11 @@ impl RemoveRoleArgs {
                 role: self.delegatee.clone(),
                 from: role,
             })?;
+
+        // update the role
+        editor
+            .update_role(role, self.expires, self.version)
+            .context(error::UpdateRole { role })?;
 
         // if sign-all is included sign and write entire repo
         if self.sign_all {

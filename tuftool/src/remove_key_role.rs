@@ -38,7 +38,7 @@ pub(crate) struct RemoveKeyArgs {
     #[structopt(short = "e", long = "expires", parse(try_from_str = parse_datetime))]
     expires: Option<DateTime<Utc>>,
 
-    /// Version of targets.json file
+    /// Version to update `role`
     #[structopt(short = "v", long = "version")]
     version: Option<NonZeroU64>,
 
@@ -96,6 +96,11 @@ impl RemoveKeyArgs {
         editor
             .remove_key(role, &self.keyid, &self.delegatee, &self.threshold)
             .context(error::RemoveKey)?;
+
+        // update the role
+        editor
+            .update_role(role, self.expires, self.version)
+            .context(error::UpdateRole { role })?;
 
         // if sign-all is included sign and write entire repo
         if self.sign_all {

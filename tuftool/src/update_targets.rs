@@ -100,6 +100,11 @@ impl UpdateTargetsArgs {
                 .context(error::DelegateeNotFound { role: role.clone() })?;
         }
 
+        // update the role
+        editor
+            .update_role(role, self.expires, self.version)
+            .context(error::UpdateRole { role })?;
+
         // if sign_all is requested, sign and write entire repo
         if self.sign_all {
             let signed_repo = editor.sign(&self.keys).context(error::SignRepo)?;

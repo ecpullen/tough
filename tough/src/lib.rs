@@ -483,7 +483,6 @@ impl<'a, T: Transport> Repository<'a, T> {
         paths: PathSet,
         threshold: NonZeroU64,
         metadata_base_url: &str,
-        version: Option<NonZeroU64>,
     ) -> Result<()> {
         // If we are delegating from targets all paths are valid
         self.verify_paths(delegator, &paths)?;
@@ -524,14 +523,6 @@ impl<'a, T: Transport> Repository<'a, T> {
             format!("{}.json", name)
         };
         self.datastore.create(&path, &role)?;
-
-        // Update parent version
-        parent.version = if let Some(version) = version {
-            version
-        } else {
-            NonZeroU64::new(u64::from(parent.version).checked_add(1).unwrap_or(1 as u64))
-                .unwrap_or_else(|| NonZeroU64::new(1).unwrap())
-        };
 
         let delegations = parent
             .delegations

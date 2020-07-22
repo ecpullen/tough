@@ -300,6 +300,13 @@ pub(crate) enum Error {
         backtrace: Backtrace,
     },
 
+    #[snafu(display("Failed to update {}: {}", role, source))]
+    UpdateRole {
+        role: String,
+        source: tough::error::Error,
+        backtrace: Backtrace,
+    },
+
     #[snafu(display("Unrecognized URL scheme \"{}\"", scheme))]
     UnrecognizedScheme {
         scheme: String,

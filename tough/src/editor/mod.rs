@@ -645,6 +645,44 @@ impl RepositoryEditor {
         }
     }
 
+    /// If expires is included updates the expiration of role.
+    /// If version is included sets version, if not increases version by 1
+    pub fn update_role(
+        &mut self,
+        role: &str,
+        expires: Option<DateTime<Utc>>,
+        version: Option<NonZeroU64>,
+    ) -> Result<()> {
+        let targets = if role == "targets" {
+            self.targets_struct
+                .as_mut()
+                .ok_or_else(|| error::Error::NoTargets)?
+        } else {
+            self.targets_struct
+                .as_mut()
+                .ok_or_else(|| error::Error::NoTargets)?
+                .targets_by_name(role)
+                .context(error::DelegateMissing {
+                    name: role.to_string(),
+                })?
+        };
+
+        if let Some(expires) = expires {
+            targets.expires = expires;
+        }
+        if let Some(version) = version {
+            targets.version = version;
+        } else {
+            NonZeroU64::new(
+                u64::from(targets.version)
+                    .checked_add(1)
+                    .ok_or_else(|| error::Error::Overflow)?,
+            )
+            .ok_or_else(|| error::Error::Overflow)?;
+        }
+        Ok(())
+    }
+
     /// Set the `Snapshot` version
     pub fn snapshot_version(&mut self, snapshot_version: NonZeroU64) -> &mut Self {
         self.snapshot_version = Some(snapshot_version);

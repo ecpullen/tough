@@ -1592,7 +1592,7 @@ fn remove_role_recursive_command() {
             "--delegatee",
             "B",
             "--recursive",
-            "--sign-all"
+            "--sign-all",
         ])
         .assert()
         .success();
