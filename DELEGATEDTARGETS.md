@@ -159,13 +159,13 @@ The `update-delegated-targets` subcommand adds the targets from `add-targets` to
     * `-m, --metadata-url`
         * Path to the metadata directory for the repository
 * Using `--recursive` with the following structure:
-        * targets
-            * A
-                * B
-            * C
-    * If targets wants to remove delegated role B due to an emergency, they must remove delegated role A, `--recursive` would be required because it would result in removing more than 1 role
-        * This allows a role to terminate a problematic role as soon as it’s noticed instead of passing the responsibility down the tree of delegated roles
-        * Without using `--recursive`, delegated role A would have to remove delegated role B and then send the metadata for delegated role A to targets to update the repository
+  * targets
+     * A
+       * B
+     * C
+   * If targets wants to remove delegated role B due to an emergency, they must remove delegated role A, `--recursive` would be required because it would result in removing more than 1 role
+     * This allows a role to terminate a problematic role as soon as it’s noticed instead of passing the responsibility down the tree of delegated roles
+     * Without using `--recursive`, delegated role A would have to remove delegated role B and then send the metadata for delegated role A to targets to update the repository
 
 ## tuftool Commands
 
