@@ -142,10 +142,10 @@ The `update-delegated-targets` subcommand adds the targets from `add-targets` to
 `remove-role` removes a role from a repository’s metadata. If `recursive` is included, whichever of `signing-role`’s delegated roles delegate `delegated-role` are removed. `recursive` should be used in an emergency when a role has become compromised.
 
 * Arguments
-    * `-d, --delegated-role`
-        * The delegated role that should be removed
     * `-k, --key`
         * The keys that will be used to sign `signing-role`
+    * `-d, --delegated-role`
+        * The delegated role that should be removed
     * `-e, --expires` 
         * The updated expiration of `signing-role`
     * `-v, --version` 
