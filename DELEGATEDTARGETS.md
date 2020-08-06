@@ -31,7 +31,7 @@ The `create-role` subcommand creates a new delegated role named `signing_role` w
 * Arguments
     * `-k, --key` 
         * Key source that will be used to sign the new metadata
-    * `-e, --expiration`
+    * `-e, --expires`
         * The expiration of the newly created metadata
     * `-v, --version` 
         * The version of the new metadata
@@ -52,7 +52,7 @@ The `add-role` subcommand adds a role created with `create-role` to `signing-rol
     * `-hp, --path-hash-prefixes` (Optional)
         * Paths to be delegated `signing-role`
         * If neither `—p` nor `—hp` are present the paths field of the delegated role will default to `paths:[]`
-    * `-e, --expiration` 
+    * `-e, --expires` 
         * The updated expiration of `signing-role`
     * `-v, --version` 
         * The updated version of `signing-role`
@@ -75,7 +75,7 @@ The `update-delegated-targets` subcommand adds the targets from `add-targets` to
 * Arguments
     * `-k, --key` 
         * The key source used to sign  `signing-role`
-    * `-e, --expiration` (Optional)
+    * `-e, --expires` (Optional)
         * The updated expiration of  `signing-role`
     * `-v, --version` (Optional)
         * The updated version of  `signing-role`
